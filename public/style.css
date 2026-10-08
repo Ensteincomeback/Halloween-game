@@ -169,3 +169,32 @@ h3 { font-size: 15px; color: var(--orange2); }
   .stat { min-width: 50px; }
   .street { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- v2: neighborhoods, economy, monsters ---- */
+.hoods { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.hood { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
+.hood.active { border-color: var(--orange); color: var(--orange2); }
+.hood.locked { opacity: .6; }
+.house.secret { background: linear-gradient(180deg, #3a3110, var(--panel)); border-color: var(--gold); }
+.house .owner { font-size: 11px; color: var(--purple); }
+.section { margin-top: 16px; }
+.section:first-child { margin-top: 0; }
+.statcard { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 10px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.statcard .row { display: flex; justify-content: space-between; padding: 2px 0; }
+.statcard .row b { color: var(--orange2); }
+.warn { background: #3b1d24; border: 1px solid #6b2f3c; color: #ffb3bd; border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 8px 0; }
+.ok { background: #1d3b2c; border: 1px solid #2f6b4c; color: var(--green); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 8px 0; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.inline-form { display: flex; gap: 6px; margin: 6px 0; }
+.inline-form input, .inline-form select, select.inp { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg2); color: var(--text); font: inherit; font-size: 13px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+.monster-types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.monster-types .btn { text-align: left; padding: 10px; }
+.counters.six { grid-template-columns: repeat(3, 1fr); }
+.check { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.card-chip { display: inline-flex; gap: 4px; align-items: center; }
+.r-common { color: var(--muted); } .r-rare { color: #7cc7ff; } .r-epic { color: var(--purple); } .r-legendary { color: var(--gold); }
+.block { background: var(--bg2); border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; font-size: 12px; }
+.inbox-item { font-size: 13px; padding: 6px 8px; border-left: 3px solid var(--purple); background: var(--bg2); border-radius: 6px; margin-bottom: 6px; }
+.banner.gold { background: #3a3110; border-color: #7a6520; color: var(--gold); }
+.locked-hood { background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); padding: 18px; }

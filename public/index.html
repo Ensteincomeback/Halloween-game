@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knock: Trick-or-Treat</title>
-  <meta name="description" content="Knock on doors. Collect candy. Don't get caught by what's behind them.">
+  <meta name="description" content="Knock on doors. Collect candy. Survive monsters.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎃</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -13,12 +13,12 @@
   <section id="login" class="screen" hidden>
     <div class="login-card">
       <div class="logo">🎃 Knock</div>
-      <p class="tagline">Knock on doors. Collect candy.<br>Don't get caught by what's behind them.</p>
+      <p class="tagline">Knock on doors. Collect candy.<br>Survive monsters.</p>
       <form id="login-form">
         <input id="login-name" maxlength="20" placeholder="Your trick-or-treater name" autocomplete="nickname" required>
         <button class="btn primary big" type="submit">Start trick-or-treating</button>
       </form>
-      <p class="fine">Season 0 · No wallet, no token, just candy.</p>
+      <p class="fine">90% Tricks. 10% Treats.<br>No wallet needed. Just knock.</p>
     </div>
   </section>
 
@@ -35,18 +35,20 @@
         <div class="stat" title="Candy in your stash is safe"><span class="lbl">Stash</span><span id="hud-stash" class="val"></span></div>
         <div class="stat" title="Danger rises the longer you stay out. Walk home to reset."><span class="lbl">Night</span><span id="hud-night" class="val"></span><div class="bar night"><div id="hud-night-bar"></div></div></div>
         <div class="stat" title="Daily streak"><span class="lbl">Streak</span><span id="hud-streak" class="val"></span></div>
+        <div class="stat" id="hud-boo-wrap" hidden title="Your $BOO balance"><span class="lbl">$BOO</span><span id="hud-boo" class="val"></span></div>
       </div>
       <button id="btn-home" class="btn home">🏡 Walk home &amp; bank</button>
     </header>
 
-    <div id="shield-banner" class="banner" hidden></div>
+    <div id="banners"></div>
 
     <main class="layout">
       <section class="street-wrap">
         <div class="street-head">
-          <h2 id="street-name">Hollow Lane</h2>
-          <div class="legend"><span>🔥 Hot House (2× candy)</span><span>⭐ Today's route</span></div>
+          <h2 id="street-name"></h2>
+          <div class="legend"><span>🔥 Hot House (2× candy)</span><span>⭐ Today's route</span><span>🏷️ For sale</span></div>
         </div>
+        <div id="hoods" class="hoods"></div>
         <div id="street" class="street"></div>
       </section>
 
@@ -59,6 +61,7 @@
           <button data-tab="leaders">Leaders</button>
           <button data-tab="feed">Feed</button>
           <button data-tab="me">Me</button>
+          <button data-tab="streets" id="tab-btn-streets" hidden>Streets</button>
         </nav>
         <div id="tab-porch" class="tab active"></div>
         <div id="tab-missions" class="tab"></div>
@@ -67,15 +70,12 @@
         <div id="tab-leaders" class="tab"></div>
         <div id="tab-feed" class="tab"></div>
         <div id="tab-me" class="tab"></div>
+        <div id="tab-streets" class="tab"></div>
       </aside>
     </main>
   </section>
 
-  <!-- Modal -->
-  <div id="modal" class="modal" hidden>
-    <div class="modal-card" id="modal-card"></div>
-  </div>
-
+  <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
   <div id="toast" class="toast" hidden></div>
 
   <script type="module" src="app.js"></script>

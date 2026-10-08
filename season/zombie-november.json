@@ -1,0 +1,30 @@
+{
+  "extends": "halloween-2026",
+  "id": "zombie-november-2026",
+  "name": "Zombie November",
+  "tagline": "The candy is gone. The neighbors aren't.",
+
+  "odds": { "candy": 38, "trick": 18, "ambush": 9 },
+
+  "neighborhoods": [
+    { "id": "hollow-lane", "name": "Hollow Lane (Overrun)" },
+    { "id": "crypt-row", "name": "Quarantine Row" },
+    { "id": "witchwood", "name": "The Outbreak Zone" }
+  ],
+
+  "npcMonsters": [
+    { "id": "shamble", "name": "Shambles",       "type": "zombie", "clue": "A slow groan. Something is dragging its feet toward you..." },
+    { "id": "mailman", "name": "Zombie Mailman", "type": "zombie", "clue": "Someone is moaning about a package that needs a signature..." },
+    { "id": "coach",   "name": "Coach Rot",      "type": "zombie", "clue": "A whistle, then: \"BRAAAINS! Two more laps!\"" },
+    { "id": "lurker",  "name": "The Lurker",     "type": "shade",  "clue": "The shadows on the sidewalk start to move..." }
+  ],
+
+  "costumes": {
+    "hazmat": { "name": "Hazmat Suit", "icon": "🦺", "price": 140, "stats": { "courage": 1, "sneak": 1 }, "counters": "zombie" }
+  },
+
+  "flavor": {
+    "candy": ["A survivor tosses you a ration bar. It counts as candy.", "Canned candy. Weird, but candy."],
+    "trick": ["A zombie trips you and eats a candy bar. Wrapper and all.", "You hide in a closet. The candy does not survive."]
+  }
+}
