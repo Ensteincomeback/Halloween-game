@@ -1,0 +1,213 @@
+{
+  "id": "halloween-2026",
+  "name": "Season 0: Halloween",
+  "neighborhood": "Hollow Lane",
+
+  "odds": {
+    "_comment": "Baseline per-knock weights (percent). See design doc section 2.",
+    "candy": 48,
+    "rare": 9,
+    "shard": 5,
+    "legendary": 2,
+    "trick": 20,
+    "scare": 12,
+    "ambush": 4
+  },
+
+  "caps": {
+    "_comment": "Protocol bounds: modifiers shift the table, they never rewrite it.",
+    "maxShiftPerOutcome": 12,
+    "minCandyWeight": 24
+  },
+
+  "rewards": {
+    "candy": [3, 6],
+    "rareMultiplier": 5,
+    "trickLoss": [1, 3],
+    "scareLoss": [2, 5],
+    "scareWinRare": true,
+    "legendaryCandy": [80, 120],
+    "legendaryTrophyCandy": 40,
+    "jackpotCandy": 300,
+    "jackpotShareOfLegendary": 0.05,
+    "jackpotGlobalDailyLimit": 3,
+    "ambushDefendCandy": [4, 8],
+    "shardSetBonus": 100
+  },
+
+  "pity": { "rareOrBetterWithin": 40 },
+
+  "energy": {
+    "dailyFree": 30,
+    "regenMinutes": 20,
+    "regenCap": 30,
+    "hardCap": 45
+  },
+
+  "player": {
+    "bagCapacity": 120,
+    "stashCapacity": 1000,
+    "baseStats": { "courage": 1, "sneak": 1, "luck": 1 }
+  },
+
+  "nightfall": {
+    "_comment": "Danger escalates as a session goes on. Walking home resets it.",
+    "knocksPerLevel": 8,
+    "maxLevel": 3,
+    "perLevel": { "candy": -3, "scare": 2, "ambush": 1 },
+    "candyBonusPerLevel": 0.15,
+    "names": ["Dusk", "Twilight", "Nightfall", "Witching Hour"]
+  },
+
+  "scare": {
+    "minDelayMs": 700,
+    "maxDelayMs": 2200,
+    "minHumanMs": 110,
+    "baseWindowMs": 900,
+    "windowPerCourageMs": 90,
+    "expireMs": 30000
+  },
+
+  "ambush": {
+    "baseSuccess": 0.5,
+    "rightCounter": -0.15,
+    "wrongCounter": 0.05,
+    "costumeCounter": -0.1,
+    "perSneak": -0.02,
+    "min": 0.2,
+    "max": 0.6,
+    "stealShare": 0.1,
+    "shieldMinutes": 20,
+    "sameMonsterCooldownHours": 6,
+    "expireMs": 60000
+  },
+
+  "trust": {
+    "start": 50,
+    "max": 80,
+    "minKnockIntervalMs": 400,
+    "lowTrust": 30,
+    "lowTrustMultiplier": 0.5,
+    "legendaryMinTrust": 40
+  },
+
+  "dailyCandy": {
+    "_comment": "Diminishing returns per account per day.",
+    "softCap": 400,
+    "softMultiplier": 0.5,
+    "hardCap": 800,
+    "hardMultiplier": 0.1
+  },
+
+  "streak": {
+    "baseBonus": 10,
+    "perDay": 5,
+    "maxDays": 7,
+    "gracePerWeek": 1
+  },
+
+  "houseTypes": {
+    "normal":    { "name": "Normal",       "icon": "🏠", "mods": {} },
+    "haunted":   { "name": "Haunted",      "icon": "🏚️", "mods": { "scare": 6, "candy": -6 }, "rareValueMultiplier": 1.5 },
+    "witch":     { "name": "Witch Hut",    "icon": "🧙", "mods": { "trick": 6, "shard": 3, "candy": -9 } },
+    "graveyard": { "name": "Graveyard",    "icon": "🪦", "mods": { "ambush": 4, "legendary": 1, "candy": -5 } }
+  },
+
+  "moods": {
+    "_comment": "Each house rolls a hidden mood per day. Tells hint at it (75% honest).",
+    "tellAccuracy": 0.75,
+    "list": {
+      "generous": { "weight": 3, "mods": { "candy": 6, "rare": 2, "trick": -4, "scare": -4 },
+                    "tells": ["A warm porch light glows", "It smells like caramel"] },
+      "balanced": { "weight": 4, "mods": {},
+                    "tells": ["A jack-o'-lantern grins", "The house is quiet"] },
+      "spooky":   { "weight": 2, "mods": { "scare": 6, "trick": 2, "candy": -8 },
+                    "tells": ["The lights are flickering", "A scream from the attic"] },
+      "prowled":  { "weight": 1, "mods": { "ambush": 4, "candy": -4 },
+                    "tells": ["Strange noises in the bushes", "Claw marks on the gate"] }
+    }
+  },
+
+  "houses": {
+    "count": 30,
+    "types": ["normal", "normal", "normal", "haunted", "normal", "witch", "normal", "graveyard", "normal", "haunted",
+              "normal", "normal", "witch", "normal", "haunted", "graveyard", "normal", "normal", "witch", "normal",
+              "haunted", "normal", "graveyard", "normal", "normal", "witch", "haunted", "normal", "graveyard", "normal"],
+    "names": ["The Hendersons", "Blue Shutters", "Corner Bungalow", "Ashgrove Manor", "The Pattersons", "Crooked Chimney",
+              "Maple Duplex", "Old Chapel Yard", "Yellow Door", "Blackwood Hall", "The Okafors", "Garden Cottage",
+              "Bramble Hollow", "The Nguyens", "Wailing Villa", "Mosswick Plot", "Brick Townhouse", "The Garcias",
+              "Cauldron Cabin", "White Picket", "Vesper House", "The Kowalskis", "Lantern Graves", "Green Gables",
+              "The Silvas", "Hemlock Hut", "Raven's Rest", "Porch Swing", "Elmwood Cemetery", "Last House on the Lane"],
+    "routeLength": 5
+  },
+
+  "monsters": [
+    { "id": "ghost",    "name": "Old Wisp",    "type": "Ghost",    "counter": "salt",
+      "clue": "A cold draft passes straight through you..." },
+    { "id": "shade",    "name": "The Lurker",  "type": "Shade",    "counter": "flashlight",
+      "clue": "The shadows on the sidewalk start to move..." },
+    { "id": "vampire",  "name": "Count Nibble","type": "Vampire",  "counter": "garlic",
+      "clue": "A cape swishes and someone says 'bleh'..." },
+    { "id": "werewolf", "name": "Fuzzbert",    "type": "Werewolf", "counter": "bell",
+      "clue": "Something big and hairy is panting behind the hedge..." }
+  ],
+
+  "counters": {
+    "salt":       { "name": "Salt",        "icon": "🧂" },
+    "flashlight": { "name": "Flashlight",  "icon": "🔦" },
+    "garlic":     { "name": "Garlic",      "icon": "🧄" },
+    "bell":       { "name": "Silver Bell", "icon": "🔔" }
+  },
+
+  "costumes": {
+    "sheet":    { "name": "Bedsheet Ghost", "icon": "👻", "price": 0,   "stats": {},                           "counters": null },
+    "witch":    { "name": "Witch",          "icon": "🧹", "price": 60,  "stats": { "luck": 1 },                "counters": "ghost" },
+    "mummy":    { "name": "Mummy",          "icon": "🩹", "price": 90,  "stats": { "courage": 1, "sneak": 1 }, "counters": "werewolf" },
+    "werewolf": { "name": "Werewolf",       "icon": "🐺", "price": 120, "stats": { "sneak": 2 },               "counters": "vampire" },
+    "vampire":  { "name": "Vampire",        "icon": "🧛", "price": 150, "stats": { "courage": 2 },             "counters": "shade" },
+    "skeleton": { "name": "Skeleton",       "icon": "💀", "price": 220, "stats": { "courage": 1, "luck": 2 },  "counters": null }
+  },
+
+  "upgrades": {
+    "bag":   { "name": "Bigger Bag",   "icon": "🎒", "price": 150, "amount": 60 },
+    "stash": { "name": "Bigger Stash", "icon": "📦", "price": 200, "amount": 500 },
+    "knocks":{ "name": "Coffee Break (+5 knocks)", "icon": "☕", "price": 40, "amount": 5 }
+  },
+
+  "shards": ["Moon Shard", "Bat Wing", "Cauldron Chip", "Grave Dust", "Pumpkin Seed"],
+  "trophies": ["Haunted Music Box", "Crystal Skull", "Cursed Locket", "Silver Raven", "Ancient Grimoire"],
+  "jackpotTrophy": "Golden Pumpkin",
+
+  "missions": [
+    { "id": "knock10",   "text": "Knock on 10 doors",          "stat": "knocks",       "goal": 10,  "reward": { "candy": 25, "knocks": 2 } },
+    { "id": "knock20",   "text": "Knock on 20 doors",          "stat": "knocks",       "goal": 20,  "reward": { "candy": 40, "knocks": 3 } },
+    { "id": "scare1",    "text": "Survive a scare",            "stat": "scaresWon",    "goal": 1,   "reward": { "candy": 20, "knocks": 2 } },
+    { "id": "bank50",    "text": "Bank 50 candy at home",      "stat": "banked",       "goal": 50,  "reward": { "candy": 20, "knocks": 2 } },
+    { "id": "types3",    "text": "Visit 3 different house types","stat": "typesVisited","goal": 3,   "reward": { "candy": 25, "knocks": 2 } },
+    { "id": "ambush1",   "text": "Fend off a monster",         "stat": "ambushesWon",  "goal": 1,   "reward": { "candy": 30, "knocks": 2 } },
+    { "id": "hot1",      "text": "Visit today's Hot House",    "stat": "hotVisits",    "goal": 1,   "reward": { "candy": 15, "knocks": 2 } },
+    { "id": "earn60",    "text": "Collect 60 candy",           "stat": "earned",       "goal": 60,  "reward": { "candy": 20, "knocks": 2 } },
+    { "id": "route",     "text": "Finish today's route",       "stat": "routeDone",    "goal": 1,   "reward": { "candy": 40, "knocks": 3 } }
+  ],
+  "missionsPerDay": 3,
+
+  "comfort": {
+    "_comment": "Scared too many times? Get a free item to stay in the game.",
+    "lossesInLast": 10,
+    "lossThreshold": 4,
+    "item": "candle"
+  },
+
+  "flavor": {
+    "candy": ["A kind grandma hands you a fistful of candy.", "Full-size bars! Well, almost.", "They drop candy in your bag with a smile."],
+    "rare": ["Homemade caramel apples! Rare candy!", "A golden wrapper glints. Rare candy!", "The good chocolate. RARE."],
+    "shard": ["Something glitters on the doormat: a collectible shard.", "Tucked under the welcome mat: a shard!"],
+    "legendary": ["The door creaks open on a treasure room. LEGENDARY!", "A cloaked figure presses something ancient into your hands. LEGENDARY!"],
+    "jackpot": ["THE GOLDEN PUMPKIN! JACKPOT! The whole street heard that."],
+    "trick": ["A dog chases you off the porch. You drop some candy.", "A sprinkler soaks your costume. A few pieces wash away.",
+              "Your hat falls off and a squirrel steals a candy.", "Toilet paper ambush! You trip and spill candy.",
+              "They hand you a toothbrush. Then a raccoon raids your bag."],
+    "scare": ["Something is behind the door..."],
+    "ambush": ["You're not alone on this porch."]
+  }
+}

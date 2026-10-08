@@ -1,0 +1,12 @@
+{
+  "name": "knock",
+  "version": "0.1.0",
+  "description": "Knock: a trick-or-treat game. Season 0 off-chain MVP.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  }
+}
