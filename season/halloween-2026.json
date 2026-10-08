@@ -52,6 +52,12 @@
 
   "energy": { "dailyFree": 30, "regenMinutes": 20, "regenCap": 30, "hardCap": 45 },
 
+  "statInfo": {
+    "courage": "Steadier nerves. Each point widens the scare mini-game's timing window by 90 ms, so jump-scares are easier to survive.",
+    "sneak": "Harder to catch. Each point lowers a monster's chance to steal from you by 2%, makes monster ambushes a little rarer, and helps you spot and step over traps (+5% per point).",
+    "luck": "Fortune favors you. Each point adds rare-candy weight to every knock, so better treats come up more often."
+  },
+
   "player": {
     "bagCapacity": 120,
     "stashCapacity": 1000,
@@ -301,7 +307,22 @@
     { "id": "earn60",  "text": "Collect 60 candy",              "stat": "earned",      "goal": 60, "reward": { "candy": 20, "knocks": 2 } },
     { "id": "route",   "text": "Finish today's route",          "stat": "routeDone",   "goal": 1,  "reward": { "candy": 40, "knocks": 3 } }
   ],
-  "missionsPerDay": 3,
+  "npcs": {
+    "_comment": "Mission givers. Each offers one mission a day from its pool. Talk to accept, come back to claim. Rewards scale with the neighborhood's candy multiplier.",
+    "mayor":  { "name": "Mayor Gourd", "title": "Mayor of the town square", "hood": null, "look": "mayor",
+                "pool": ["knock10", "earn60", "hot1", "route"],
+                "hello": "Ah, a fresh face! This town runs on candy and courage. Help me out?" },
+    "hollow": { "name": "Old Mrs. Hollow", "title": "Knows every door on Hollow Lane", "hood": "hollow-lane", "look": "granny",
+                "pool": ["types3", "bank50", "scare1", "knock20"],
+                "hello": "Back in my day we knocked uphill both ways. Here's a little errand, dearie." },
+    "crypt":  { "name": "Gravedigger Mort", "title": "Keeps Crypt Row tidy", "hood": "crypt-row", "look": "digger",
+                "pool": ["ambush1", "knock20", "earn60"],
+                "hello": "Monsters keep digging up my nice graves. Teach 'em a lesson." },
+    "witch":  { "name": "Hazel", "title": "The Witch of Witchwood", "hood": "witchwood", "look": "witch",
+                "pool": ["scare1", "ambush1", "types3"],
+                "hello": "Hee hee! Brave little thing. I've a task, if your nerves can take it." }
+  },
+  "npcRadius": 3.5,
 
   "comfort": { "lossesInLast": 10, "lossThreshold": 4 },
 

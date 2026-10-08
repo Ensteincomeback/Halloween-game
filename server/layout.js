@@ -24,33 +24,33 @@ const BLOCKS = [
   },
   // Crypt Row: east of the square.
   {
-    entrance: rect('crypt-gateway', 19, 31, -3, 3),
+    entrance: rect('crypt-gateway', 23, 31, -3, 3),
     block: rect('crypt', 30, 124, -34, 12),
     rows: [0, -24],
     firstX: 44, dirX: 1,
     connector: rect('crypt-connector', 34, 37, -25.5, 1.5),
-    gate: { x: 25, z: 0, vertical: true, span: 6 },
-    keeper: { x: 17.5, z: 4.5 },
+    gate: { x: 27, z: 0, vertical: true, span: 6 },
+    keeper: { x: 21.5, z: 4.5 },
     secret: { x: 118, z: 2.5, hedge: { z1: -34, z2: 12, x: 111 } },
   },
   // Witchwood Heights: west of the square.
   {
-    entrance: rect('witch-gateway', -31, -19, -3, 3),
+    entrance: rect('witch-gateway', -31, -23, -3, 3),
     block: rect('witchwood', -124, -30, -34, 12),
     rows: [0, -24],
     firstX: -44, dirX: -1,
     connector: rect('witch-connector', -37, -34, -25.5, 1.5),
-    gate: { x: -25, z: 0, vertical: true, span: 6 },
-    keeper: { x: -17.5, z: 4.5 },
+    gate: { x: -27, z: 0, vertical: true, span: 6 },
+    keeper: { x: -21.5, z: 4.5 },
     secret: { x: -118, z: 2.5, hedge: { z1: -34, z2: 12, x: -111 } },
   },
 ];
 
 export function buildLayout(season) {
   const houses = {};
-  const square = rect('square', -20, 20, -14, 14);
+  const square = rect('square', -24, 24, -18, 14);
   const zones = [square];
-  const roads = [rect('square-plaza', -20, 20, -14, 14, { kind: 'plaza' })];
+  const roads = [rect('square-plaza', -24, 24, -18, 14, { kind: 'plaza' })];
   const gates = [];
   const keepers = [];
   const hedges = [];
@@ -95,11 +95,35 @@ export function buildLayout(season) {
     gates,
     keepers,
     hedges,
-    bank: { x: -10, z: 5, w: 9, door: { x: -10, z: 4.1 } },
-    fountain: { x: 9, z: 5, r: 2.5 },
-    spawn: { x: 0, z: -4 },
+    bank: { x: -12, z: 6, w: 9, door: { x: -12, z: 5.1 } },
+    // Shops around the town square (walk in and press E).
+    stores: [
+      store('costumes', 12, 6, 8),
+      store('sweets', -14, -7, 7),
+      store('cards', 14, -7, 7),
+      store('dojo', -7, -15, 5),
+      store('raffle', 7, -15, 5),
+    ],
+    // Townsfolk who hand out missions. Where they stand is shared with the
+    // server, which checks you're next to them when you accept or claim.
+    npcs: [
+      npc('mayor', 3.5, -10),
+      npc('hollow', 4, 44),
+      npc('crypt', 40, -12),
+      npc('witch', -40, -12),
+    ],
+    fountain: { x: 0, z: -1, r: 2.5 },
+    spawn: { x: 0, z: -9 },
     bounds: { minX: -130, maxX: 130, minZ: -42, maxZ: 92 },
   };
+}
+
+function store(id, x, z, w) {
+  return { id, x, z, w, door: { x, z: r1(z - 0.9) } };
+}
+
+function npc(id, x, z) {
+  return { id, x, z, spot: { x, z: r1(z - 1.3) } };
 }
 
 export function distance(a, b) {

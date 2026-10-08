@@ -7,7 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/index.js",
-    "dev": "DEV=1 node server/index.js",
+    "dev": "node server/index.js --dev",
     "test": "node --test test/*.test.js"
   }
 }

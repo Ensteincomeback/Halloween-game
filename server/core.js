@@ -137,20 +137,26 @@ export function installCore(ctx) {
     }
   }
 
+  // One mission a day from each townsfolk mission giver.
   function dailyMissions(pid, d) {
-    const pool = [...season.missions];
-    pool.sort((a, b) => hashInt(pid, d, a.id) - hashInt(pid, d, b.id));
-    return pool.slice(0, season.missionsPerDay).map((m) => m.id);
+    return Object.entries(season.npcs || {}).filter(([k]) => !k.startsWith('_')).map(([giver, n]) => {
+      const pool = [...n.pool].sort((a, b) => hashInt(pid, d, giver, a) - hashInt(pid, d, giver, b));
+      return { giver, id: pool[0], state: 'offered', base: 0 };
+    });
   }
 
   function rollDay(p) {
     const d = ctx.today();
-    if (p.day === d) return;
+    if (p.day === d) {
+      // older saves stored mission ids as plain strings
+      if (typeof p.daily?.missions?.[0] === 'string') p.daily.missions = dailyMissions(p.id, d);
+      return;
+    }
     p.day = d;
     p.knocks = Math.max(p.knocks, season.energy.dailyFree);
     p.knocksUpdatedAt = now();
     p.daily = {
-      missions: dailyMissions(p.id, d), claimed: [],
+      missions: dailyMissions(p.id, d),
       progress: { knocks: 0, scaresWon: 0, banked: 0, typesVisited: [], ambushesWon: 0, hotVisits: 0, earned: 0, routeDone: 0 },
       routeVisited: [], candyEarned: 0, booEarned: 0, raffleTickets: 0,
     };
@@ -239,6 +245,14 @@ export function installCore(ctx) {
       p.trust = Math.max(0, p.trust - 3);
       throw new GameError("You can't get there that fast. Walk!", 429);
     }
+  };
+  // Is the player standing at `spot` (within radius)? Also enforces travel speed.
+  ctx.atSpot = (p, spot, pos, radius, message) => {
+    const x = Number(pos?.x);
+    const z = Number(pos?.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - spot.x, z - spot.z) > radius) throw new GameError(message, 403);
+    ctx.checkTravel(p, spot);
+    ctx.arrive(p, spot);
   };
   ctx.arrive = (p, at) => {
     p.lastPos = { x: at.x, z: at.z, t: now() };

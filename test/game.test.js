@@ -95,7 +95,8 @@ test('new players get a character, knocks, a streak bonus, missions, and a hidde
   const { player } = env.login('Pumpkin');
   assert.equal(player.knocks, season.energy.dailyFree);
   assert.equal(player.stash, season.streak.baseBonus);
-  assert.equal(player.missions.length, 3);
+  assert.equal(player.missions.length, Object.keys(season.npcs).filter((k) => !k.startsWith('_')).length);
+  assert.ok(player.missions.every((m) => m.state === 'offered'));
   assert.equal(player.wallet, null, 'economy is hidden at first');
   assert.equal(player.deepEconomy, false);
 });
@@ -672,4 +673,39 @@ test('dev build: shortcuts exist only in dev mode and skip the grind', () => {
   t += 1000;
   const tr = game.knock(v.token, 5, { holdMs: 100 }).result;
   assert.equal(tr.outcome, 'trap');
+});
+
+// ---------------- townsfolk missions ----------------
+
+test('missions come from townsfolk: walk up to accept, progress counts from then, claim back at the NPC', () => {
+  const env = setup();
+  const L = buildLayout(season);
+  const { token, p } = env.login('Kid');
+  const mayor = L.npcs.find((n) => n.id === 'mayor');
+  const entry = p.daily.missions.find((e) => e.giver === 'mayor');
+  const m = season.missions.find((x) => x.id === entry.id);
+  assert.throws(() => env.game.acceptMission(token, 'mayor', { x: 60, z: 60 }), /Walk over/);
+  assert.throws(() => env.game.claimMission(token, 'mayor', mayor.spot), /Accept the mission first/);
+  // progress made before accepting doesn't count
+  const pre = Array.isArray(p.daily.progress[m.stat]) ? null : (p.daily.progress[m.stat] = 3);
+  env.game.acceptMission(token, 'mayor', mayor.spot);
+  assert.equal(entry.state, 'active');
+  assert.throws(() => env.game.claimMission(token, 'mayor', mayor.spot), /Not done yet/);
+  if (Array.isArray(p.daily.progress[m.stat])) p.daily.progress[m.stat].push('a', 'b', 'c', 'd', 'e');
+  else p.daily.progress[m.stat] = (pre || 0) + m.goal;
+  const stash = p.stash;
+  const { reward } = env.game.claimMission(token, 'mayor', mayor.spot);
+  assert.equal(p.stash, stash + reward.candy);
+  assert.throws(() => env.game.claimMission(token, 'mayor', mayor.spot), /Already claimed/);
+  // NPCs inside a locked neighborhood can't be reached yet
+  const mort = L.npcs.find((n) => n.id === 'crypt');
+  assert.throws(() => env.game.acceptMission(token, 'crypt', mort.spot), /gate/);
+});
+
+test('layout: stores and mission givers sit on walkable ground', () => {
+  const L = buildLayout(season);
+  const inZone = (x, z) => L.zones.some((zn) => x > zn.minX && x < zn.maxX && z > zn.minZ && z < zn.maxZ);
+  for (const s of L.stores) assert.ok(inZone(s.door.x, s.door.z), s.id);
+  for (const n of L.npcs) assert.ok(inZone(n.spot.x, n.spot.z), n.id);
+  for (const n of Object.keys(season.npcs).filter((k) => !k.startsWith('_'))) assert.ok(L.npcs.some((x) => x.id === n), n);
 });

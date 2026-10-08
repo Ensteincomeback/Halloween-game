@@ -648,3 +648,160 @@ export function beaconSprite(frame = 0) {
 }
 
 export { hash };
+
+// ---------- town-square shops ----------
+export const STORE_STYLE = {
+  costumes: { name: 'SPOOKY THREADS', wall: '#5a7178', wallD: '#475b61', roof: '#ad73c5', awning: ['#ad73c5', '#f1d078'], show: 'hats' },
+  sweets: { name: 'SUGAR RUSH', wall: '#f2c9d8', wallD: '#e0aec2', roof: '#ff93b8', awning: ['#ff93b8', '#faf9ff'], show: 'lollies' },
+  cards: { name: 'CRYPT CARDS', wall: '#4f6a55', wallD: '#3f5545', roof: '#2e3a33', awning: ['#2e3a33', '#d9a520'], show: 'cards' },
+  dojo: { name: 'COURAGE DOJO', stall: true, awning: ['#c0392b', '#faf9ff'], show: 'dummy' },
+  raffle: { name: 'RAFFLE', stall: true, awning: ['#6a3d8a', '#ffd34d'], show: 'tickets' },
+};
+
+export function storeSprite(id, w) {
+  return memo(`store:${id}:${w}`, () => {
+    const S = STORE_STYLE[id];
+    const W = w * T;
+    const H = S.stall ? 58 : 84;
+    const [c, g] = canvas(W + 8, H + 8);
+    const ox = 4;
+    const baseY = H + 4;
+    const lights = [];
+    const stripes = (x, y, wd, h) => {
+      for (let i = 0; i < wd; i += 6) rect(g, x + i, y, Math.min(6, wd - i), h, S.awning[(i / 6) % 2]);
+      for (let i = 0; i < wd; i += 6) rect(g, x + i + 1, y + h, 4, 2, S.awning[(i / 6) % 2]);
+      rect(g, x, y, wd, 1, PAL.outline);
+    };
+    const showcase = (x, y, wd, h) => {
+      outlineRect(g, x, y, wd, h, '#ffe7a0');
+      lights.push({ x: x + wd / 2, y: y + h / 2, r: 22, color: '#ffe7a0', kind: 'window' });
+      for (let i = 0; i < Math.floor((wd - 4) / 8); i++) {
+        const ix = x + 3 + i * 8;
+        if (S.show === 'hats') { rows(g, ix + 3, y + h - 12, 7, 1, 7, '#5f4d70'); rect(g, ix, y + h - 6, 7, 1, PAL.outline); }
+        if (S.show === 'lollies') { rect(g, ix + 3, y + h - 7, 1, 6, '#faf9ff'); outlineRect(g, ix + 1, y + h - 12, 5, 5, ['#ff93b8', '#93e9ff', '#b6ff8a'][i % 3]); }
+        if (S.show === 'cards') outlineRect(g, ix + 1, y + h - 12, 5, 8, ['#c9a8ff', '#ffd34d', '#93e9ff'][i % 3]);
+      }
+    };
+    if (!S.stall) {
+      outlineRect(g, ox, baseY - 46, W, 46, S.wall);
+      for (let x = ox + 4; x < ox + W - 2; x += 5) rect(g, x, baseY - 44, 1, 42, S.wallD);
+      // flat roof with a parapet and a sign board
+      outlineRect(g, ox - 2, baseY - 54, W + 4, 9, S.roof);
+      const tw = textWidth(S.name);
+      outlineRect(g, ox + W / 2 - tw / 2 - 4, baseY - 70, tw + 8, 13, '#2b2238');
+      pixelText(g, S.name, Math.round(ox + W / 2 - tw / 2), baseY - 66, '#ffd34d');
+      rect(g, ox + W / 2 - tw / 2, baseY - 57, 1, 3, PAL.outline);
+      rect(g, ox + W / 2 + tw / 2, baseY - 57, 1, 3, PAL.outline);
+      stripes(ox - 1, baseY - 44, W + 2, 6);
+      showcase(ox + 5, baseY - 32, W / 2 - 14, 20);
+      showcase(ox + W / 2 + 9, baseY - 32, W / 2 - 14, 20);
+      outlineRect(g, ox + W / 2 - 7, baseY - 22, 14, 22, '#a0715a');
+      px(g, ox + W / 2 + 4, baseY - 11, PAL.candle);
+      rect(g, ox + W / 2 - 9, baseY - 2, 18, 2, PAL.sidewalkD);
+      lights.push({ x: ox + W / 2, y: baseY - 26, r: 16, color: '#ffd27a', kind: 'porch' });
+    } else {
+      // market stall: counter + striped canopy on poles
+      rect(g, ox + 2, baseY - 40, 2, 40, PAL.woodD);
+      rect(g, ox + W - 4, baseY - 40, 2, 40, PAL.woodD);
+      stripes(ox, baseY - 46, W, 9);
+      outlineRect(g, ox + 1, baseY - 16, W - 2, 16, '#8a5f45');
+      rect(g, ox + 2, baseY - 15, W - 4, 2, '#a0715a');
+      const tw = textWidth(S.name);
+      outlineRect(g, ox + W / 2 - tw / 2 - 3, baseY - 58, tw + 6, 11, '#2b2238');
+      pixelText(g, S.name, Math.round(ox + W / 2 - tw / 2), baseY - 55, '#ffd34d');
+      if (S.show === 'dummy') {
+        // training dummy behind the counter
+        rect(g, ox + W / 2 - 1, baseY - 34, 2, 18, PAL.woodD);
+        outlineRect(g, ox + W / 2 - 5, baseY - 34, 10, 10, '#e6d193');
+        rect(g, ox + W / 2 - 8, baseY - 30, 16, 2, PAL.woodD);
+        px(g, ox + W / 2 - 2, baseY - 31, PAL.eyes); px(g, ox + W / 2 + 1, baseY - 31, PAL.eyes);
+      } else {
+        for (let i = 0; i < 4; i++) outlineRect(g, ox + 10 + i * 12, baseY - 26 + (i % 2) * 2, 9, 6, ['#ffd34d', '#ff93b8', '#93e9ff', '#b6ff8a'][i]);
+      }
+      lights.push({ x: ox + W / 2, y: baseY - 30, r: 26, color: '#ffd27a', kind: 'porch' });
+    }
+    return { img: c, ax: ox + W / 2, ay: baseY, lights };
+  });
+}
+
+// ---------- townsfolk ----------
+export function npcSprite(look, frame = 0) {
+  return memo(`npc:${look}:${frame}`, () => {
+    const [c, g] = canvas(20, 36);
+    const b = frame ? 1 : 0;
+    const top = 10 + b;
+    const head = (skin, x = 5, w = 10) => {
+      rect(g, x + 1, top, w - 2, 1, PAL.outline);
+      rect(g, x, top + 1, w, 8, PAL.outline);
+      rect(g, x + 1, top + 9, w - 2, 1, PAL.outline);
+      rect(g, x + 1, top + 1, w - 2, 8, skin);
+      rect(g, x + 2, top + 4, 1, 2, PAL.eyes);
+      rect(g, x + w - 3, top + 4, 1, 2, PAL.eyes);
+    };
+    const body = (col, colD, wTop = 10, wBot = 14) => {
+      rows(g, 10, 20 + b, 13, wTop, wBot, col);
+      rect(g, 13, 22 + b, 2, 9, colD);
+      rect(g, 6, 33, 3, 2, '#3b324f');
+      rect(g, 11, 33, 3, 2, '#3b324f');
+    };
+    if (look === 'mayor') {
+      body('#2b2238', '#1d1830');
+      rect(g, 9, 21 + b, 2, 10, '#c0392b'); // sash
+      // pumpkin head + top hat
+      rect(g, 4, top + 1, 12, 9, PAL.outline);
+      rect(g, 5, top, 10, 11, PAL.outline);
+      rect(g, 5, top + 1, 10, 9, PAL.orange);
+      rect(g, 9, top + 1, 1, 9, PAL.orangeD);
+      rect(g, 6, top + 3, 2, 2, PAL.candle);
+      rect(g, 12, top + 3, 2, 2, PAL.candle);
+      rect(g, 7, top + 7, 6, 1, PAL.candle);
+      rect(g, 3, top - 1, 14, 2, '#1d1820');
+      rect(g, 6, top - 8, 8, 7, '#1d1820');
+      rect(g, 6, top - 3, 8, 1, '#c0392b');
+    } else if (look === 'granny') {
+      body('#6a3d8a', '#552f70', 12, 16);
+      rect(g, 4, 20 + b, 12, 3, '#9a7ab0'); // shawl
+      head('#f2d5bf');
+      rect(g, 6, top, 8, 3, '#d8d4e4');
+      rect(g, 7, top - 3, 6, 3, '#d8d4e4'); // bun
+      rect(g, 6, top + 4, 3, 2, PAL.outline); rect(g, 11, top + 4, 3, 2, PAL.outline); // glasses
+      rect(g, 17, 20 + b, 1, 15, PAL.woodD); // cane
+    } else if (look === 'digger') {
+      body('#6b5a44', '#584835');
+      head('#e8c9a8');
+      rect(g, 5, top, 10, 3, '#4a4a3a');
+      rect(g, 3, top + 2, 14, 1, '#4a4a3a'); // cap
+      rect(g, 17, 14 + b, 1, 20, PAL.woodD); // shovel handle
+      outlineRect(g, 15, 30, 5, 5, '#9a98a8');
+    } else {
+      // witch
+      body('#4a2a5a', '#3a2048', 12, 16);
+      head('#a8d8a0');
+      rect(g, 1, top + 1, 18, 2, PAL.outline);
+      rect(g, 2, top + 1, 16, 1, '#2b2238');
+      rows(g, 10, top - 10, 11, 2, 10, '#2b2238');
+      rect(g, 6, top - 1, 8, 1, '#7dff6a');
+      rect(g, 1, 22 + b, 1, 13, PAL.woodD); // broom
+      rect(g, 0, 32, 3, 3, '#e6d193');
+    }
+    return c;
+  });
+}
+
+export function markerSprite(kind) {
+  return memo(`marker:${kind}`, () => {
+    const [c, g] = canvas(9, 13);
+    const col = kind === 'ready' ? '#ffd34d' : kind === 'active' ? '#a99cc8' : '#ffd34d';
+    outlineRect(g, 0, 0, 9, 13, '#2b2238');
+    if (kind === 'offer') {
+      rect(g, 3, 2, 3, 6, col);
+      rect(g, 3, 9, 3, 2, col);
+    } else {
+      rect(g, 2, 2, 5, 2, col);
+      rect(g, 5, 4, 2, 2, col);
+      rect(g, 3, 6, 3, 2, col);
+      rect(g, 3, 9, 3, 2, col);
+    }
+    return c;
+  });
+}

@@ -16,14 +16,7 @@ export function installEconomy(ctx) {
   // The Candy Bank is a building in the town square: you have to walk there.
   ctx.bank = (p, pos) => {
     if (p.pending) throw new GameError(`Finish the ${p.pending.type} first!`, 409);
-    const B = ctx.layout.bank.door;
-    const x = Number(pos?.x);
-    const z = Number(pos?.z);
-    if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - B.x, z - B.z) > season.travel.bankRadius) {
-      throw new GameError('Walk to the Candy Bank in the town square to deposit.', 403);
-    }
-    ctx.checkTravel(p, B);
-    ctx.arrive(p, B);
+    ctx.atSpot(p, ctx.layout.bank.door, pos, season.travel.bankRadius, 'Walk to the Candy Bank in the town square to deposit.');
     const moved = Math.min(p.stashCapacity - p.stash, p.bag);
     p.bag -= moved;
     p.stash += moved;
@@ -227,22 +220,56 @@ export function installEconomy(ctx) {
     return season.token.devnetFaucet;
   };
 
-  // ---------- missions ----------
-  const missionProgress = (p, m) => {
-    const v = p.daily.progress[m.stat];
+  // ---------- missions (handed out by townsfolk) ----------
+  const statValue = (p, stat) => {
+    const v = p.daily.progress[stat];
     return Array.isArray(v) ? v.length : v;
+  };
+  // Progress counts from the moment you accepted the mission.
+  const missionProgress = (p, entry) => {
+    const m = season.missions.find((x) => x.id === entry.id);
+    return entry.state === 'offered' ? 0 : Math.max(0, statValue(p, m.stat) - entry.base);
   };
   ctx.missionProgress = missionProgress;
 
-  ctx.claimMission = (p, missionId) => {
-    const m = season.missions.find((x) => x.id === missionId);
-    if (!m || !p.daily.missions.includes(missionId)) throw new GameError("Not one of today's missions", 404);
-    if (p.daily.claimed.includes(missionId)) throw new GameError('Already claimed');
-    if (missionProgress(p, m) < m.goal) throw new GameError('Not done yet');
-    p.daily.claimed.push(missionId);
-    ctx.addStash(p, m.reward.candy, 'mission');
-    p.knocks = Math.min(season.energy.hardCap, p.knocks + (m.reward.knocks || 0));
-    return m.reward;
+  ctx.missionReward = (entry) => {
+    const m = season.missions.find((x) => x.id === entry.id);
+    const hood = ctx.hood(season.npcs[entry.giver].hood);
+    const mult = hood?.candyMultiplier || 1;
+    return { candy: Math.round(m.reward.candy * mult), knocks: m.reward.knocks || 0 };
+  };
+
+  function atNpc(p, giver, pos) {
+    const n = season.npcs[giver];
+    const spot = ctx.layout.npcs.find((x) => x.id === giver)?.spot;
+    if (!n || !spot) throw new GameError('Nobody by that name around here', 404);
+    if (n.hood && !p.unlocked.includes(n.hood)) throw new GameError(`${n.name} is behind the ${ctx.hood(n.hood).name} gate.`, 403);
+    ctx.atSpot(p, spot, pos, season.npcRadius, `Walk over to ${n.name} to talk.`);
+    const entry = p.daily.missions.find((e) => e.giver === giver);
+    if (!entry) throw new GameError(`${n.name} has nothing for you today.`, 404);
+    return entry;
+  }
+
+  ctx.acceptMission = (p, giver, pos) => {
+    const entry = atNpc(p, giver, pos);
+    if (entry.state !== 'offered') throw new GameError('You already took this mission.');
+    const m = season.missions.find((x) => x.id === entry.id);
+    entry.state = 'active';
+    entry.base = statValue(p, m.stat);
+    return { mission: entry.id };
+  };
+
+  ctx.claimMission = (p, giver, pos) => {
+    const entry = atNpc(p, giver, pos);
+    const m = season.missions.find((x) => x.id === entry.id);
+    if (entry.state === 'offered') throw new GameError('Accept the mission first.');
+    if (entry.state === 'claimed') throw new GameError('Already claimed. Come back tomorrow!');
+    if (missionProgress(p, entry) < m.goal) throw new GameError('Not done yet');
+    entry.state = 'claimed';
+    const reward = ctx.missionReward(entry);
+    ctx.addStash(p, reward.candy, 'mission');
+    p.knocks = Math.min(season.energy.hardCap, p.knocks + reward.knocks);
+    return reward;
   };
 
   ctx.economyReport = () => {

@@ -31,6 +31,7 @@ export function createDevPanel({ api, S, toast, teleport, refresh, startTutorial
       const first = Object.values(layout.houses).find((h) => h.hood === n.id && !h.secret);
       if (first) list.push([`${n.name} (first house)`, first.door]);
     }
+    for (const n of layout.npcs) list.push([`Mission giver: ${S.catalog.npcs[n.id].name}`, n.spot]);
     for (const s of S.catalog.secretHouses) list.push([`Secret: ${s.name}`, layout.houses[s.id].door]);
     return list;
   };

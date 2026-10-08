@@ -9,6 +9,7 @@
 import {
   T, PAL, canvas, groundTile, houseSprite, HOUSE_STYLE, treeSprite, lampSprite, fenceSprite, gateSprite, keeperSprite,
   tombSprite, hedgeSprite, signSprite, bankSprite, fountainSprite, ghostSprite, beaconSprite, pumpkinSprite, hash,
+  storeSprite, STORE_STYLE, npcSprite, markerSprite,
 } from './sprites.js';
 
 const CHUNK = 32; // tiles per ground chunk
@@ -27,6 +28,7 @@ export function createWorld(container, catalog) {
   let W = 0;
   let H = 0;
   let zoom = 3;
+  let zoomBias = 0;
   let dpr = 1;
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -36,7 +38,7 @@ export function createWorld(container, catalog) {
     view.height = light.height = H;
     view.style.width = `${container.clientWidth}px`;
     view.style.height = `${container.clientHeight}px`;
-    zoom = Math.max(2, Math.round(Math.min(W / 440, H / 280)));
+    zoom = Math.max(1, Math.round(Math.min(W / 440, H / 280)) + zoomBias);
     ctx.imageSmoothingEnabled = false;
   }
   resize();
@@ -153,7 +155,7 @@ export function createWorld(container, catalog) {
       }
     }
   }
-  for (const [x, z] of [[-17, -11], [17, -11], [-17, 11.5], [17, 11.5]]) {
+  for (const [x, z] of [[-21, -15], [21, -15], [-21, 11.5], [21, 11.5], [-4, 3], [4, 3]]) {
     add({ x, z, img: lamp, ax: 6, ay: 39, kind: 'lamp', light: { r: 64, color: '#ffe7a0', oy: 36 } });
     circles.push({ x, z, r: 0.25 });
   }
@@ -167,12 +169,19 @@ export function createWorld(container, catalog) {
   circles.push({ x: L.fountain.x, z: L.fountain.z, r: L.fountain.r });
 
   // A small graveyard and pumpkins for atmosphere.
-  for (const [x, z, v] of [[-60, 44, 0], [-57, 45, 1], [-63, 46, 1], [60, 44, 0], [63, 45, 1], [57, 46, 0], [114, -30, 1], [-114, -30, 0], [-17, -6, 1], [-14, -7, 0]]) {
+  for (const [x, z, v] of [[-60, 44, 0], [-57, 45, 1], [-63, 46, 1], [60, 44, 0], [63, 45, 1], [57, 46, 0], [114, -30, 1], [-114, -30, 0]]) {
     if (!walkable(x, z, 0.5)) continue;
     add({ x, z, img: tombSprite(v), ax: 6, ay: 13, kind: 'tomb' });
     circles.push({ x, z: z + 0.2, r: 0.4 });
   }
-  for (const [x, z] of [[-4, -9], [4, -9], [14, 10], [-3, 12], [3, 12]]) add({ x, z, img: pumpkinSprite(true), ax: 4, ay: 8, kind: 'pumpkin', light: { r: 16, color: '#ffb85a', oy: 4 } });
+  // Shops around the square
+  for (const st of L.stores) {
+    const sp = storeSprite(st.id, st.w);
+    add({ x: st.x, z: st.z, img: sp.img, ax: sp.ax, ay: sp.ay, kind: 'store', lights: sp.lights, id: st.id });
+    colliders.push({ minX: st.x - st.w / 2, maxX: st.x + st.w / 2, minZ: st.z, maxZ: st.z + (STORE_STYLE[st.id].stall ? 1.2 : 2.6) });
+  }
+  for (const n of L.npcs) circles.push({ x: n.x, z: n.z, r: 0.45 });
+  for (const [x, z] of [[-3, -5], [3, -5], [-3, 12], [3, 12], [-21, -17], [21, -17]]) add({ x, z, img: pumpkinSprite(true), ax: 4, ay: 8, kind: 'pumpkin', light: { r: 16, color: '#ffb85a', oy: 4 } });
 
   // ---------- dynamic: houses, gates, keepers, hedges ----------
   const houses = new Map(); // id → { prop, sig, view, sprite }
@@ -180,6 +189,12 @@ export function createWorld(container, catalog) {
   const keeperProps = new Map();
   const hedgeProps = new Map();
   let houseColliders = new Map();
+  let npcState = {}; // id → 'offer' | 'active' | 'ready' | null
+  let npcInfo = {};
+  const setNpcs = (state, info) => {
+    npcState = state;
+    npcInfo = info;
+  };
 
   function houseSig(v) {
     return JSON.stringify([v.type, v.forSale, v.owner?.name, v.tell, v.hot, v.onRoute, v.listing?.price, v.dial, v.lantern]);
@@ -308,6 +323,13 @@ export function createWorld(container, catalog) {
       const img = gateSprite(true);
       for (let z = spec.z - spec.span / 2 + 0.5; z < spec.z + spec.span / 2; z += 1) vis.push({ x: spec.x, z, img, ax: 8, ay: 29, kind: 'gate' });
     }
+    for (const n of L.npcs) {
+      if (!onScreen(n.x, n.z)) continue;
+      const look = npcInfo[n.id]?.look || 'mayor';
+      vis.push({ x: n.x, z: n.z, img: npcSprite(look, Math.floor(time * 1.6 + n.x) % 2), ax: 10, ay: 35, kind: 'npc' });
+      const mk = npcState[n.id];
+      if (mk) vis.push({ x: n.x, z: n.z - 0.01, img: markerSprite(mk), ax: 4, ay: 46 + Math.round(Math.sin(time * 4) * 2), kind: 'marker' });
+    }
     for (const k of keeperProps.values()) vis.push({ x: k.x, z: k.z, img: keeperSprite(Math.floor(time * 1.5) % 2), ax: 10, ay: 39, kind: 'keeper', light: { r: 30, color: '#ffd34d', oy: 12 } });
     for (const { spec, locked } of hedgeProps.values()) {
       if (!locked) continue;
@@ -359,6 +381,14 @@ export function createWorld(container, catalog) {
         const y = sy(p.z) - p.light.oy * scale;
         hole(x, y, p.light.r * scale, 0.95);
         glows.push([x, y, p.light.r * scale * 0.6, p.light.color, 0.18]);
+      }
+      if (p.kind === 'store') {
+        for (const l of p.lights) {
+          const x = sx(p.x) + (l.x - p.ax) * scale;
+          const y = sy(p.z) + (l.y - p.ay) * scale;
+          hole(x, y, l.r * scale, 0.9);
+          glows.push([x, y, l.r * scale * 0.7, l.color, 0.2]);
+        }
       }
       if (p.kind === 'house') {
         const h = houses.get(p.id);
@@ -430,6 +460,16 @@ export function createWorld(container, catalog) {
       if (!k || Math.hypot(k.x - focus.x, k.z - focus.z) > 9) continue;
       label(sx(k.x), sy(k.z) - 46 * scale, [`Gatekeeper of ${g.hood.name}`, g.locked ? `Level ${g.hood.minLevel} or a ${g.hood.unlockCost} candy bribe` : 'You may pass'], g.locked ? '#ffd34d' : '#6ee7a0', 1);
     }
+    for (const st of L.stores) {
+      if (Math.hypot(st.x - focus.x, st.z - focus.z) > 7) continue;
+      const info = labels.stores?.[st.id];
+      if (info) label(sx(st.x), sy(st.z) - ((STORE_STYLE[st.id].stall ? 64 : 90) * scale), [info.name, info.sub], '#ffd34d', 1);
+    }
+    for (const n of L.npcs) {
+      if (Math.hypot(n.x - focus.x, n.z - focus.z) > 6) continue;
+      const info = npcInfo[n.id];
+      if (info) label(sx(n.x), sy(n.z) - 50 * scale, [info.name, info.title], '#c9a8ff', 1);
+    }
     if (labels.bank && Math.hypot(L.bank.x - focus.x, L.bank.z - focus.z) < 12) label(sx(L.bank.x), sy(L.bank.z) - 116 * scale, ['Candy Bank', 'Deposit your bucket here'], '#ff93b8', 1);
   }
 
@@ -450,7 +490,11 @@ export function createWorld(container, catalog) {
     ctx.globalAlpha = 1;
   }
 
-  return { canvas: view, sync, move, blocked, render, setBeacon, layout: L, houses, keepers: keeperProps };
+  const setZoomBias = (b) => {
+    zoomBias = b;
+    resize();
+  };
+  return { canvas: view, sync, move, blocked, render, setBeacon, setNpcs, setZoomBias, layout: L, houses, keepers: keeperProps };
 }
 
 function hexA(hex, a) {

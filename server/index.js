@@ -16,7 +16,9 @@ const port = Number(process.env.PORT) || 3000;
 
 const season = loadSeason(seasonFile);
 const store = createStore(dataFile);
-const DEV = process.env.DEV === '1';
+// Dev build: `npm run dev`, `node server/index.js --dev`, or DEV=1. On Windows,
+// `set DEV=1 && node ...` stores "1 " with a trailing space, so trim it.
+const DEV = process.argv.includes('--dev') || ['1', 'true', 'yes', 'on'].includes(String(process.env.DEV ?? '').trim().toLowerCase());
 const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
@@ -80,7 +82,8 @@ const routes = {
   'POST /api/craft': (t, b) => game.craft(t, b.cardId),
   'POST /api/mint-card': (t, b) => game.mintCard(t, b.cardId),
   'POST /api/prize': (t, b) => game.redeemPrize(t, b.prizeId),
-  'POST /api/mission': (t, b) => game.claimMission(t, b.missionId),
+  'POST /api/npc/accept': (t, b) => game.acceptMission(t, b.giver, b.pos),
+  'POST /api/npc/claim': (t, b) => game.claimMission(t, b.giver, b.pos),
   'POST /api/claim': (t) => game.claimBoo(t),
   'POST /api/faucet': (t) => game.faucet(t),
   'POST /api/deed/buy': (t, b) => game.buyDeed(t, b.houseId),

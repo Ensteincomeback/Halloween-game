@@ -4,7 +4,7 @@
 
 import { createWorld } from './pixel/world2d.js';
 import { createActor } from './pixel/actor.js';
-import { kidFrame } from './pixel/sprites.js';
+import { kidFrame, npcSprite } from './pixel/sprites.js';
 import { createInput } from './input.js';
 import { helpHtml } from './ui/help.js';
 import { createDevPanel } from './ui/dev.js';
@@ -24,6 +24,16 @@ window.__knock = S; // handy for debugging and browser tests
 const ICON = { candy: '🍬', bigCandy: '🍫', rare: '🍭', collectible: '🃏', token: '🪙', legendary: '👑', jackpot: '🎃', secretHouse: '🗝️', trick: '🐕', scare: '👻', ambush: '🧟', trap: '🪤', dial: '🎛️', sold: '🏷️' };
 const LABEL = { candy: 'Candy', bigCandy: 'Big candy', rare: 'Rare candy', collectible: 'Monster card', token: '$BOO', legendary: 'Legendary', secretHouse: 'Secret house', trick: 'Trick', scare: 'Scare', ambush: 'Monster attack', trap: 'Trap', dial: 'Behavior change', sold: 'Sold' };
 const sym = () => S.catalog?.token.symbol || 'BOO';
+
+// Shops in the town square. Each opens the matching shop sections.
+const STORES = {
+  costumes: { name: 'Spooky Threads', icon: '🎭', sub: 'Costumes', hello: 'Looking for a new look? Every costume scares off one kind of monster.', sections: ['costumes'] },
+  sweets: { name: 'Sugar Rush', icon: '🍭', sub: 'Boosts & upgrades', hello: 'Sweets for the sweet! Boosts for tonight, upgrades for good.', sections: ['boosts', 'upgrades'] },
+  cards: { name: 'Crypt Cards', icon: '🃏', sub: 'Monster cards & crafting', hello: 'Three of a kind? I can turn them into something rarer.', sections: ['cards'] },
+  dojo: { name: 'Courage Dojo', icon: '🥋', sub: 'Train your stats', hello: 'Train hard, knock harder. Each level costs double the last.', sections: ['training'] },
+  raffle: { name: 'Raffle Tent', icon: '🎟️', sub: 'Daily costume raffle', hello: 'One ticket, one chance at the Moonlit Banshee costume!', sections: ['raffle'] },
+};
+const STAT_ICON = { courage: '🦁', sneak: '🥷', luck: '🍀' };
 
 // ---------- API ----------
 
@@ -79,6 +89,7 @@ function showStart() {
   $('#start-returning').hidden = !known;
   $('#start-returning-name').textContent = known ? `Level ${S.player.level} · ${S.catalog.costumes[S.player.costume].name}` : '';
   $('#btn-play').textContent = known ? '▶ Continue' : '▶ Play';
+  $('#dev-badge').hidden = !S.catalog.dev;
   renderWallet();
   animatePreview();
 }
@@ -165,6 +176,8 @@ async function startGame() {
   await refreshWorld();
   if (!S.gfx) init2D();
   else S.gfx.world.sync(S.world);
+  S.gfx.input.state.enabled = true;
+  $('#controls-hint').hidden = localStorage.getItem('knock.hint') === 'off';
   S.selected ??= S.world.route[0] || 1;
   S.houseDetail = await api(`house/${S.selected}`);
   renderAll();
@@ -199,6 +212,7 @@ function init2D() {
     onDev: () => S.dev?.toggle(),
   });
   S.gfx = { world, hero, input, pos, last: performance.now(), lastSave: 0, lastMap: 0 };
+  world.setZoomBias(Number(localStorage.getItem('knock.zoom') || 0));
   if (S.catalog.dev) S.dev = createDevPanel({ api, S, toast, teleport, refresh: reloadHouse, startTutorial, layout: L });
   requestAnimationFrame(loop);
 }
@@ -221,7 +235,7 @@ function loop(now) {
   const step = Math.hypot(g.pos.x - before.x, g.pos.z - before.z);
   g.hero.update(dt, dt ? step / dt : 0, m.x, m.z);
   if (S.tut) tutorialMoved(step);
-  g.world.render(dt, g.pos, g.hero, { bank: true });
+  g.world.render(dt, g.pos, g.hero, { bank: true, stores: STORES });
   updateNearby(g.pos);
   if (now - g.lastMap > 150) {
     g.lastMap = now;
@@ -249,6 +263,8 @@ function updateNearby(pos) {
   };
   consider('bank', 'bank', L.bank.door);
   for (const k of L.keepers) consider('keeper', k.hood, k.spot);
+  for (const st of L.stores) consider('store', st.id, st.door);
+  for (const n of L.npcs) consider('npc', n.id, n.spot);
   for (const h of S.world.houses) if (L.houses[h.id]) consider('house', h.id, L.houses[h.id].door);
   const key = best ? `${best.kind}:${best.id}` : null;
   if (key !== S.nearKey || S.actionDownAt) {
@@ -273,6 +289,19 @@ function renderPrompt() {
   if (n.kind === 'bank') {
     el.innerHTML = `<kbd>E</kbd> Deposit <b>${S.player.bag} 🍬</b> at the Candy Bank`;
     btn.textContent = '🏦 Deposit';
+    return;
+  }
+  if (n.kind === 'store') {
+    el.innerHTML = `<kbd>E</kbd> Enter <b>${STORES[n.id].icon} ${STORES[n.id].name}</b> · ${STORES[n.id].sub}`;
+    btn.textContent = '🚪 Enter';
+    return;
+  }
+  if (n.kind === 'npc') {
+    const npc = S.catalog.npcs[n.id];
+    const m = S.player.missions.find((x) => x.giver === n.id);
+    const what = !m ? '' : m.state === 'offered' ? ' · <span class="gold">has a mission!</span>' : m.state === 'active' && m.progress >= m.goal ? ' · <span class="gold">reward ready!</span>' : m.state === 'active' ? ` · ${m.progress}/${m.goal}` : ' · done for today';
+    el.innerHTML = `<kbd>E</kbd> Talk to <b>${esc(npc.name)}</b>${what}`;
+    btn.textContent = '💬 Talk';
     return;
   }
   if (n.kind === 'keeper') {
@@ -311,6 +340,8 @@ async function onActionUp() {
   if (!n) return;
   if (n.kind === 'bank') return doBank();
   if (n.kind === 'keeper') return talkToKeeper(n.id);
+  if (n.kind === 'store') return openStore(n.id);
+  if (n.kind === 'npc') return talkToNpc(n.id);
   const h = S.world.houses.find((x) => x.id === n.id);
   if (h?.forSale) return selectHouse(h.id, { open: true });
   S.selected = n.id;
@@ -372,6 +403,7 @@ function showHelp() {
 const TUTORIAL = [
   { id: 'welcome', title: 'Welcome to Hollow Lane!', text: 'You are a trick-or-treater with a jack-o\'-lantern bucket. Tonight, every door is a surprise.', next: true },
   { id: 'move', title: 'Walk around', text: 'Use <kbd>W A S D</kbd> or the arrow keys to walk (joystick on phones). Hold <kbd>Shift</kbd> to run.' },
+  { id: 'quest', title: 'Meet the townsfolk', text: 'People with a <b class="gold">!</b> over their head have missions. Walk to <b>Mayor Gourd</b> and press <kbd>E</kbd> to take one. Come back to them when it\'s done.', beacon: 'mayor' },
   { id: 'knock', title: 'Knock on a door', text: 'Follow the gold arrow to a door, then <b>hold &amp; release <kbd>E</kbd></b> to knock.', beacon: 'house' },
   { id: 'more', title: 'Every door is different', text: 'Candy, tricks, scares and monsters! Read each house\'s clue before you knock. Knock on <b>2 more doors</b>.' },
   { id: 'bank', title: 'Bank your candy', text: 'Monsters steal from your bucket. Carry it to the <b>Candy Bank</b> (pink roof, follow the arrow) and press <kbd>E</kbd>.', beacon: 'bank' },
@@ -409,6 +441,10 @@ function renderTutorial() {
   // point the way
   const L = S.catalog.layout;
   if (step.beacon === 'bank') S.gfx.world.setBeacon({ x: L.bank.x, z: L.bank.z, h: 128 });
+  else if (step.beacon === 'mayor') {
+    const n = L.npcs.find((x) => x.id === 'mayor');
+    S.gfx.world.setBeacon({ x: n.x, z: n.z, h: 62 });
+  }
   else if (step.beacon === 'keeper' && L.keepers[0]) {
     const pos = S.gfx.pos;
     const k = [...L.keepers].sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z))[0];
@@ -445,6 +481,7 @@ function tutorialEvent(kind) {
   } else if (kind === 'deposit' && id === 'bank') advanceTutorial();
   else if (kind === 'menu' && id === 'menu') advanceTutorial();
   else if (kind === 'keeper' && id === 'gate') advanceTutorial();
+  else if (kind === 'accept' && id === 'quest') advanceTutorial();
 }
 
 // ---------- minimap ----------
@@ -468,6 +505,9 @@ function drawMinimap(pos) {
     g.fillRect(Math.round(X(x) - r), Math.round(Y(z) - r), r * 2, r * 2);
   };
   dot(L.bank.x, L.bank.z + 1.5, '#ff4fa3', 4);
+  for (const st of L.stores) dot(st.x, st.z + 1, '#93e9ff', 3);
+  const marks = npcMarkers();
+  for (const n of L.npcs) dot(n.x, n.z, marks[n.id] === 'offer' || marks[n.id] === 'ready' ? '#ffd34d' : '#c9a8ff', 3);
   for (const k of L.keepers) {
     const open = S.world.neighborhoods.find((n) => n.id === k.hood)?.unlocked;
     dot(k.x, k.z, open ? '#6ee7a0' : '#ffd34d', 3);
@@ -520,7 +560,9 @@ function renderAll() {
     S.gfx.world.sync(S.world);
     S.gfx.hero.setCostume(S.player.costume);
     S.gfx.hero.setBucketFill(S.player.bag / S.player.bagCapacity);
+    S.gfx.world.setNpcs(npcMarkers(), S.catalog.npcs);
   }
+  if (S.openStore && modalOpen()) renderStoreModal();
   if (S.drawer) renderTab();
   renderPrompt();
 }
@@ -640,16 +682,32 @@ function renderPorch() {
     </ul>`;
 }
 
+function npcMarkers() {
+  const out = {};
+  for (const m of S.player?.missions || []) {
+    out[m.giver] = m.state === 'offered' ? 'offer' : m.state === 'active' ? (m.progress >= m.goal ? 'ready' : 'active') : null;
+  }
+  return out;
+}
+
+const whereIs = (giver) => {
+  const hood = S.catalog.npcs[giver].hood;
+  return hood ? S.world.neighborhoods.find((n) => n.id === hood)?.name : 'Town square';
+};
+
 function renderMissions() {
   const p = S.player;
+  const badge = (m) => m.state === 'offered' ? '<span class="badge gold-badge">! New</span>' : m.state === 'claimed' ? '<span class="badge">✓ Done</span>' : m.progress >= m.goal ? '<span class="badge gold-badge">? Reward ready</span>' : '<span class="badge">In progress</span>';
   $('#tab-missions').innerHTML = `
-    <h3>Daily missions</h3>
+    <h3>Quest log</h3>
+    <p class="muted small">Townsfolk around the map hand out one mission a day. Walk up to someone with a <b class="gold">!</b> to accept, and return when it shows <b class="gold">?</b> to collect.</p>
     <div class="list">${p.missions.map((m) => `
       <div class="item"><div style="flex:1">
-        <div class="title">${esc(m.text)}</div>
-        <div class="muted small">+${m.reward.candy} 🍬 · +${m.reward.knocks} knocks</div>
-        <div class="progress"><div style="width:${(100 * m.progress) / m.goal}%"></div></div></div>
-        ${m.claimed ? '<span class="muted">✓</span>' : `<button class="btn small ${m.progress >= m.goal ? 'primary' : ''}" data-claim="${m.id}" ${m.progress >= m.goal ? '' : 'disabled'}>${m.progress}/${m.goal}</button>`}
+        <div class="title">${esc(m.giverName)} ${badge(m)}</div>
+        <div class="small">${m.state === 'offered' ? '<i class="muted">Talk to them to find out</i>' : esc(m.text)}</div>
+        <div class="muted small">📍 ${esc(whereIs(m.giver))}${m.locked ? ' (behind a gate)' : ''} · +${m.reward.candy} 🍬 · +${m.reward.knocks} knocks</div>
+        ${m.state === 'active' ? `<div class="progress"><div style="width:${(100 * m.progress) / m.goal}%"></div></div>` : ''}</div>
+        ${m.state !== 'claimed' ? `<button class="btn small" data-track="${m.giver}">📍 Track</button>` : ''}
       </div>`).join('')}</div>
     <h3 class="section">Streak</h3>
     <p>🔥 <b>${p.streak} day${p.streak === 1 ? '' : 's'}</b>. Today +${p.streakBonusToday} 🍬, tomorrow <b>+${p.streakBonusTomorrow}</b>. One grace day a week.</p>
@@ -659,39 +717,135 @@ function renderMissions() {
     <p class="small muted">Opens to everyone daily at ${String(S.world.legendaryEvent.hourUtc).padStart(2, '0')}:00 UTC for one hour.</p>`;
 }
 
-function renderShop() {
+function trackNpc(giver) {
+  const n = S.catalog.layout.npcs.find((x) => x.id === giver);
+  S.beacon = null;
+  S.gfx.world.setBeacon({ x: n.x, z: n.z, h: 62 });
+  toggleDrawer(false);
+  toast(`Follow the gold arrow to ${S.catalog.npcs[giver].name}`);
+}
+
+// ---------- townsfolk ----------
+function talkToNpc(giver) {
+  const npc = S.catalog.npcs[giver];
+  const m = S.player.missions.find((x) => x.giver === giver);
+  let body;
+  if (!m) body = '<p>"Nothing for you today, friend."</p><div class="actions"><button class="btn primary" data-close>Bye!</button></div>';
+  else if (m.state === 'offered') body = `<p>"${esc(npc.hello)}"</p>
+      <div class="quest-card"><b>${esc(m.text)}</b><div class="muted small">Reward: +${m.reward.candy} 🍬 · +${m.reward.knocks} knocks</div></div>
+      <div class="actions"><button class="btn primary" id="btn-npc-go" data-mode="accept">Accept mission</button><button class="btn" data-close>Maybe later</button></div>`;
+  else if (m.state === 'active' && m.progress >= m.goal) body = `<p>"You did it! I knew you had it in you."</p>
+      <div class="quest-card"><b>${esc(m.text)}</b> ✓</div>
+      <div class="actions"><button class="btn primary" id="btn-npc-go" data-mode="claim">Collect +${m.reward.candy} 🍬 +${m.reward.knocks} knocks</button></div>`;
+  else if (m.state === 'active') body = `<p>"How's it going? Come back when it's done."</p>
+      <div class="quest-card"><b>${esc(m.text)}</b><div class="progress"><div style="width:${(100 * m.progress) / m.goal}%"></div></div><div class="muted small">${m.progress}/${m.goal}</div></div>
+      <div class="actions"><button class="btn primary" data-close>On it!</button></div>`;
+  else body = '<p>"Thanks again! Come see me tomorrow for something new."</p><div class="actions"><button class="btn primary" data-close>Bye!</button></div>';
+  showModal(`<canvas class="npc-portrait" id="npc-portrait" width="60" height="108"></canvas><h2>${esc(npc.name)}</h2><p class="muted small">${esc(npc.title)}</p>${body}`);
+  const g = $('#npc-portrait').getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(npcSprite(npc.look, 0), 0, 0, 60, 108);
+  const go = $('#btn-npc-go');
+  if (go) go.onclick = async () => {
+    try {
+      const pos = S.gfx.pos;
+      if (go.dataset.mode === 'accept') {
+        await api('npc/accept', { giver, pos: { x: pos.x, z: pos.z } });
+        tutorialEvent('accept');
+        toast(`Mission accepted: ${m.text}`);
+      } else {
+        const r = await api('npc/claim', { giver, pos: { x: pos.x, z: pos.z } });
+        S.gfx.hero.play('cheer', 0.9);
+        toast(`Mission complete! +${r.reward.candy} 🍬 +${r.reward.knocks} knocks`);
+      }
+      closeModal();
+      await reloadHouse();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+
+// ---------- shops (shared by the menu and the physical stores) ----------
+function shopSection(kind) {
   const p = S.player;
   const c = S.catalog;
   const total = p.bag + p.stash;
   const boo = p.wallet?.boo ?? 0;
-  const statStr = (s) => Object.entries(s).map(([k, v]) => `+${v} ${k}`).join(', ') || 'no stats';
-  const costumeRow = ([id, k]) => {
-    const owned = p.ownedCostumes.includes(id);
-    if (k.raffleOnly && !owned) return '';
-    if (k.booPrice && !p.deepEconomy) return '';
-    const price = k.booPrice ? `${k.booPrice} $${sym()}` : `${k.price} 🍬`;
-    const can = k.booPrice ? boo >= k.booPrice : total >= k.price;
-    return `<div class="item"><div><div class="title">${k.icon} ${esc(k.name)}</div>
-      <div class="muted small">${statStr(k.stats)}${k.counters ? ` · counters ${k.counters}s` : ''}</div></div>
-      ${p.costume === id ? '<span class="muted">Wearing</span>' : owned ? `<button class="btn small" data-equip="${id}">Wear</button>` : `<button class="btn small primary" data-buy="costume:${id}" ${can ? '' : 'disabled'}>${price}</button>`}</div>`;
-  };
-  $('#tab-shop').innerHTML = `
-    <p class="muted small">You have ${total} 🍬 (stash spent first). Spent candy leaves the economy for good.</p>
-    <h3>Costumes</h3><div class="list">${Object.entries(c.costumes).map(costumeRow).join('')}</div>
-    <h3 class="section">Boosts</h3><div class="list">${Object.entries(c.boosts).map(([id, b]) => `
+  const statStr = (st) => Object.entries(st).map(([k, v]) => `+${v} ${k}`).join(', ') || 'no stats';
+  if (kind === 'costumes') {
+    const costumeRow = ([id, k]) => {
+      const owned = p.ownedCostumes.includes(id);
+      if (k.raffleOnly && !owned) return '';
+      if (k.booPrice && !p.deepEconomy) return '';
+      const price = k.booPrice ? `${k.booPrice} $${sym()}` : `${k.price} 🍬`;
+      const can = k.booPrice ? boo >= k.booPrice : total >= k.price;
+      return `<div class="item"><div><div class="title">${k.icon} ${esc(k.name)}</div>
+        <div class="muted small">${statStr(k.stats)}${k.counters ? ` · scares off ${k.counters}s` : ''}</div></div>
+        ${p.costume === id ? '<span class="muted">Wearing</span>' : owned ? `<button class="btn small" data-equip="${id}">Wear</button>` : `<button class="btn small primary" data-buy="costume:${id}" ${can ? '' : 'disabled'}>${price}</button>`}</div>`;
+    };
+    return `<h3>Costumes</h3><p class="muted small">Costume stats add to your Courage / Sneak / Luck (the Courage Dojo explains each one).</p><div class="list">${Object.entries(c.costumes).map(costumeRow).join('')}</div>`;
+  }
+  if (kind === 'boosts') return `<h3>Boosts</h3><div class="list">${Object.entries(c.boosts).map(([id, b]) => `
       <div class="item"><div><div class="title">${b.icon} ${esc(b.name)}</div><div class="muted small">${esc(b.text)}</div></div>
-      <button class="btn small primary" data-buy="boost:${id}" ${total < b.price ? 'disabled' : ''}>${b.price} 🍬</button></div>`).join('')}</div>
-    <h3 class="section">Upgrades</h3><div class="list">${Object.entries(c.upgrades).map(([id, u]) => `
+      <button class="btn small primary" data-buy="boost:${id}" ${total < b.price ? 'disabled' : ''}>${b.price} 🍬</button></div>`).join('')}</div>`;
+  if (kind === 'upgrades') return `<h3>Upgrades</h3><div class="list">${Object.entries(c.upgrades).map(([id, u]) => `
       <div class="item"><div class="title">${u.icon} ${esc(u.name)}</div>
-      <button class="btn small primary" data-buy="upgrade:${id}" ${total < u.price ? 'disabled' : ''}>${u.price} 🍬</button></div>`).join('')}</div>
-    <h3 class="section">Neighborhoods</h3>
-    <div class="list">${S.world.neighborhoods.map((n) => `<div class="item"><div><div class="title">${n.unlocked ? '🔓' : '🔒'} ${esc(n.name)}</div>
-      <div class="muted small">Level ${n.minLevel} · ${n.candyMultiplier}× candy</div></div>
-      ${n.unlocked ? '<span class="muted">Open</span>' : `<span class="muted small">Gatekeeper: level ${n.minLevel} or ${n.unlockCost} 🍬 bribe</span>`}</div>`).join('')}</div>
-    <h3 class="section">Daily cosmetic raffle</h3>
+      <button class="btn small primary" data-buy="upgrade:${id}" ${total < u.price ? 'disabled' : ''}>${u.price} 🍬</button></div>`).join('')}</div>`;
+  if (kind === 'raffle') return `<h3>Daily cosmetic raffle</h3>
     <div class="item"><div><div class="title">${c.costumes[c.raffle.prizeCostume].icon} ${esc(c.costumes[c.raffle.prizeCostume].name)} costume</div>
       <div class="muted small">${p.raffleTickets}/${c.raffle.maxTicketsPerDay} tickets today · drawn at midnight UTC</div></div>
       <button class="btn small primary" data-act="raffle" ${total < c.raffle.ticketPrice || p.raffleTickets >= c.raffle.maxTicketsPerDay ? 'disabled' : ''}>${c.raffle.ticketPrice} 🍬</button></div>`;
+  if (kind === 'training') return `<h3>Train your stats</h3>${statsHtml(true)}`;
+  if (kind === 'cards') {
+    const owned = c.cards.filter((x) => p.cards[x.id] > 0);
+    return `<h3>Monster cards <span class="muted small">(${owned.length}/${c.cards.length})</span></h3>
+    <p class="muted small">Original cards. ${c.cardRules.craftDuplicates} copies + ${c.cardRules.craftCost} 🍬 crafts a higher rarity.${p.deepEconomy ? ' Epic and Legendary cards can be minted to your wallet.' : ''}</p>
+    <div class="list">${owned.length ? owned.map((x) => `<div class="item small"><span class="r-${x.rarity}">🃏 ${esc(x.name)} ×${p.cards[x.id]}</span><span class="row-actions" style="margin:0">
+      ${p.cards[x.id] >= c.cardRules.craftDuplicates && x.rarity !== 'legendary' ? `<button class="btn small" data-craft="${x.id}">Craft</button>` : ''}
+      ${p.deepEconomy && ['epic', 'legendary'].includes(x.rarity) ? `<button class="btn small" data-mint="${x.id}">Mint</button>` : ''}</span></div>`).join('') : '<p class="muted small">No cards yet. Some doors have them taped on.</p>'}</div>`;
+  }
+  return '';
+}
+
+// Courage / Sneak / Luck, with what each one actually does.
+function statsHtml(trainable) {
+  const p = S.player;
+  const info = S.catalog.statInfo || {};
+  return `<div class="stat-list">${['courage', 'sneak', 'luck'].map((k) => `
+    <div class="stat-card">
+      <div class="stat-top"><span class="stat-name">${STAT_ICON[k]} ${k[0].toUpperCase() + k.slice(1)}</span><b class="stat-num">${p.stats[k]}</b>
+        <span class="info" tabindex="0" title="${esc(info[k] || '')}">ⓘ</span></div>
+      <p class="muted small">${esc(info[k] || '')}</p>
+      <div class="stat-foot"><span class="muted small">Trained ${p.trained[k]}/5 · costume and boosts add more</span>
+      ${trainable ? (p.trained[k] < 5 ? `<button class="btn small primary" data-train="${k}" ${p.bag + p.stash < p.trainCosts[k] ? 'disabled' : ''}>Train · ${p.trainCosts[k]} 🍬</button>` : '<span class="muted small">Maxed</span>') : ''}</div>
+    </div>`).join('')}</div>`;
+}
+
+function openStore(id) {
+  S.openStore = id;
+  renderStoreModal();
+}
+
+function renderStoreModal() {
+  const st = STORES[S.openStore];
+  const p = S.player;
+  const id = S.openStore;
+  showModal(`<div class="store-head"><span class="big-icon">${st.icon}</span><div><h2>${st.name}</h2><p class="muted small">"${st.hello}"</p></div></div>
+    <p class="muted small">You have ${p.bag + p.stash} 🍬 (bank spent first).</p>
+    ${st.sections.map(shopSection).join('<div class="section"></div>')}
+    <div class="actions"><button class="btn primary" data-close>Leave shop</button></div>`, { wide: true });
+  S.openStore = id;
+}
+
+function renderShop() {
+  $('#tab-shop').innerHTML = `
+    <p class="muted small">You have ${S.player.bag + S.player.stash} 🍬. Prefer browsing in person? The shops in the town square sell the same things.</p>
+    ${['costumes', 'boosts', 'upgrades', 'training', 'cards', 'raffle'].map(shopSection).join('<div class="section"></div>')}
+    <h3 class="section">Neighborhoods</h3>
+    <div class="list">${S.world.neighborhoods.map((n) => `<div class="item"><div><div class="title">${n.unlocked ? '🔓' : '🔒'} ${esc(n.name)}</div>
+      <div class="muted small">Level ${n.minLevel} · ${n.candyMultiplier}× candy</div></div>
+      ${n.unlocked ? '<span class="muted">Open</span>' : `<span class="muted small">Gatekeeper: level ${n.minLevel} or ${n.unlockCost} 🍬 bribe</span>`}</div>`).join('')}</div>`;
 }
 
 function renderBoard() {
@@ -741,12 +895,12 @@ function renderMe() {
   const p = S.player;
   const c = S.catalog;
   const ss = p.seasonStats;
-  const owned = c.cards.filter((x) => p.cards[x.id] > 0);
   $('#tab-me').innerHTML = `
     <h3>${c.costumes[p.costume].icon} ${esc(p.name)} · Level ${p.level}</h3>
     <div class="row-actions"><button class="btn small primary" data-act="playercard">📸 Share my player card</button></div>
+    <h3 class="section">Stats</h3>
+    ${statsHtml(true)}
     <div class="kv">
-      ${['courage', 'sneak', 'luck'].map((k) => `<div>${k[0].toUpperCase() + k.slice(1)}<b>${p.stats[k]}</b>${p.trained[k] < 5 ? `<button class="btn small" data-train="${k}">Train · ${p.trainCosts[k]} 🍬</button>` : '<span class="muted small">maxed</span>'}</div>`).join('')}
       <div>Lucky Candles<b>${p.items.candle}</b></div>
       <div>Candy this season<b>${ss.earned}</b></div>
       <div>Houses visited<b>${ss.housesVisited}</b></div>
@@ -755,11 +909,7 @@ function renderMe() {
       <div>Biggest haul<b>${ss.biggestReward ? `${ss.biggestReward.amount} 🍬` : '—'}</b></div>
       <div>Rare guaranteed in<b>${p.pityLimit - p.pity} knocks</b></div>
     </div>
-    <h3 class="section">Monster cards <span class="muted small">(${owned.length}/${c.cards.length})</span></h3>
-    <p class="muted small">Original cards. ${c.cardRules.craftDuplicates} copies + ${c.cardRules.craftCost} 🍬 crafts a higher rarity.${p.deepEconomy ? ' Epic and Legendary cards can be minted to your wallet.' : ''}</p>
-    <div class="list">${owned.length ? owned.map((x) => `<div class="item small"><span class="r-${x.rarity}">🃏 ${esc(x.name)} ×${p.cards[x.id]}</span><span class="row-actions" style="margin:0">
-      ${p.cards[x.id] >= c.cardRules.craftDuplicates && x.rarity !== 'legendary' ? `<button class="btn small" data-craft="${x.id}">Craft</button>` : ''}
-      ${p.deepEconomy && ['epic', 'legendary'].includes(x.rarity) ? `<button class="btn small" data-mint="${x.id}">Mint</button>` : ''}</span></div>`).join('') : '<p class="muted small">No cards yet. Some doors have them taped on.</p>'}</div>
+    <div class="section"></div>${shopSection('cards')}
     <h3 class="section">Trophies</h3>
     <div class="pill-row">${p.trophies.length ? p.trophies.map((t) => `<span class="chip">🏆 ${esc(t)}</span>`).join('') : '<span class="muted small">None yet.</span>'}</div>
     <h3 class="section">Real-world prizes</h3>
@@ -768,10 +918,9 @@ function renderMe() {
       ${pr.requested ? '<span class="muted">Requested</span>' : `<button class="btn small ${pr.met ? 'primary' : ''}" data-prize="${pr.id}" ${pr.met ? '' : 'disabled'}>Redeem</button>`}</div>`).join('')}</div>
     <h3 class="section">Monster field guide</h3>
     <div class="list">${c.npcMonsters.map((m) => `<div class="item small"><span>${esc(m.name)} the ${esc(m.type)}</span><span class="muted">weak to ${c.counters[c.monsterCounters[m.type]].icon} ${esc(c.counters[c.monsterCounters[m.type]].name)}</span></div>`).join('')}</div>
-    <p class="section row-actions"><button class="btn small" id="btn-help">❔ How to play</button><button class="btn small" id="btn-replay-tut">🎓 Replay tutorial</button><button class="btn small" id="btn-logout">Log out</button></p>`;
+    <p class="section row-actions"><button class="btn small" id="btn-help">❔ How to play</button><button class="btn small" id="btn-open-settings">⚙ Settings</button></p>`;
   $('#btn-help').onclick = () => showHelp();
-  $('#btn-replay-tut').onclick = () => { toggleDrawer(false); startTutorial(); };
-  $('#btn-logout').onclick = () => { if (confirm('Log out? Your progress is tied to this browser.')) { toggleDrawer(false); $('#game').hidden = true; logout(); } };
+  $('#btn-open-settings').onclick = () => showSettings();
 }
 
 async function renderStreets() {
@@ -887,6 +1036,7 @@ document.addEventListener('click', async (e) => {
     if ((x = el('[data-house]'))) return await selectHouse(Number(x.dataset.house));
     if (el('#btn-menu')) return toggleDrawer();
     if (el('#btn-help-hud')) return showHelp();
+    if (el('#btn-settings')) return showSettings();
     if (el('#btn-close-drawer')) return toggleDrawer(false);
     if ((x = el('[data-tab]'))) {
       S.tab = x.dataset.tab;
@@ -899,10 +1049,10 @@ document.addEventListener('click', async (e) => {
       const [kind, itemId] = x.dataset.buy.split(':');
       await api('buy', { kind, itemId });
       toast('Purchased!');
-    } else if ((x = el('[data-equip]'))) await api('equip', { costumeId: x.dataset.equip });
-    else if ((x = el('[data-claim]'))) {
-      const r = await api('mission', { missionId: x.dataset.claim });
-      toast(`Mission complete! +${r.reward.candy} 🍬, +${r.reward.knocks} knocks`);
+    } else if ((x = el('[data-equip]'))) {
+      await api('equip', { costumeId: x.dataset.equip });
+    } else if ((x = el('[data-track]'))) {
+      return trackNpc(x.dataset.track);
     } else if ((x = el('[data-train]'))) {
       await api('train', { stat: x.dataset.train });
       toast('Training complete!');
@@ -1181,12 +1331,75 @@ function showModal(html, { locked = false, wide = false } = {}) {
 }
 function closeModal() {
   $('#modal').hidden = true;
+  S.openStore = null;
 }
 $('#modal').addEventListener('click', (e) => {
   if (e.target.id === 'modal' && !$('#modal').dataset.locked) closeModal();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !$('#modal').dataset.locked) closeModal();
+  if (e.key !== 'Escape') return;
+  if (!$('#modal').hidden) {
+    if (!$('#modal').dataset.locked) closeModal();
+  } else if (S.drawer) toggleDrawer(false);
+  else if (!$('#game').hidden) showSettings();
 });
+
+// ---------- settings ----------
+function showSettings() {
+  const zoom = Number(localStorage.getItem('knock.zoom') || 0);
+  const hint = localStorage.getItem('knock.hint') !== 'off';
+  showModal(`<h2>⚙ Settings</h2>
+    <div class="settings">
+      <div class="setting-row"><span>Zoom</span><span class="row-actions" style="margin:0"><button class="btn small" id="set-zoom-out">−</button><b>${zoom >= 0 ? '+' : ''}${zoom}</b><button class="btn small" id="set-zoom-in">+</button></span></div>
+      <label class="setting-row"><span>Show controls hint</span><input type="checkbox" id="set-hint" ${hint ? 'checked' : ''}></label>
+      <div class="setting-row"><span>Tutorial</span><button class="btn small" id="set-tutorial">🎓 Replay</button></div>
+      <div class="setting-row"><span>How to play</span><button class="btn small" id="set-help">❔ Open</button></div>
+      ${S.catalog.dev ? '<div class="setting-row"><span>Dev panel</span><button class="btn small dev-btn" id="set-dev">DEV</button></div>' : ''}
+    </div>
+    <div class="actions">
+      <button class="btn primary" data-close>▶ Resume</button>
+      <button class="btn" id="set-main-menu">🏠 Main menu</button>
+      <button class="btn" id="set-logout">Log out</button>
+    </div>
+    <p class="muted small">Your progress is saved on the server as you play.</p>`);
+  const setZoom = (d) => {
+    const z = Math.max(-1, Math.min(3, zoom + d));
+    localStorage.setItem('knock.zoom', z);
+    S.gfx.world.setZoomBias(z);
+    showSettings();
+  };
+  $('#set-zoom-out').onclick = () => setZoom(-1);
+  $('#set-zoom-in').onclick = () => setZoom(1);
+  $('#set-hint').onchange = (e) => {
+    localStorage.setItem('knock.hint', e.target.checked ? 'on' : 'off');
+    $('#controls-hint').hidden = !e.target.checked;
+  };
+  $('#set-tutorial').onclick = () => {
+    closeModal();
+    startTutorial();
+  };
+  $('#set-help').onclick = () => showHelp();
+  if ($('#set-dev')) $('#set-dev').onclick = () => {
+    closeModal();
+    S.dev?.toggle(true);
+  };
+  $('#set-main-menu').onclick = () => backToMainMenu();
+  $('#set-logout').onclick = () => {
+    if (!confirm('Log out? Your progress is tied to this login.')) return;
+    backToMainMenu();
+    logout();
+  };
+}
+
+function backToMainMenu() {
+  closeModal();
+  toggleDrawer(false);
+  if (S.tut) endTutorial();
+  S.dev?.toggle(false);
+  if (S.gfx) S.gfx.input.state.enabled = false;
+  $('#game').hidden = true;
+  showStart();
+}
+
 
 boot();

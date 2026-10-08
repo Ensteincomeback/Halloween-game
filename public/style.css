@@ -271,3 +271,22 @@ kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--
   #banners { top: 140px; }
   .start-title { font-size: 44px; }
 }
+/* ---- v5: shops, townsfolk, settings, stats ---- */
+.dev-badge { color: #ff8fa0; font-family: 'Silkscreen', monospace; font-size: 12px; margin-top: 12px; }
+.stat-list { display: grid; gap: 8px; }
+.stat-card { background: var(--bg2); border: 2px solid var(--line); padding: 10px; }
+.stat-card p { margin: 6px 0; }
+.stat-top { display: flex; align-items: center; gap: 8px; }
+.stat-name { font-weight: 700; }
+.stat-num { margin-left: auto; font-size: 18px; color: var(--orange2); }
+.stat-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.info { cursor: help; color: var(--muted); border: 1px solid var(--line); width: 18px; height: 18px; display: inline-grid; place-items: center; font-size: 12px; }
+.quest-card { background: var(--bg2); border: 2px solid var(--gold); padding: 10px; margin: 10px 0; text-align: left; }
+.npc-portrait { width: 60px; height: 108px; image-rendering: pixelated; display: block; margin: 0 auto; }
+.store-head { display: flex; gap: 12px; align-items: center; }
+.store-head h2 { margin: 0; text-align: left !important; }
+.store-head p { margin: 4px 0 0; }
+.settings { display: grid; gap: 6px; margin: 12px 0; text-align: left; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg2); border: 2px solid var(--line); padding: 8px 10px; }
+.setting-row input[type=checkbox] { width: 18px; height: 18px; }
+.gold-badge { background: #ffd34d22 !important; color: var(--gold) !important; }

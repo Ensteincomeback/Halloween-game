@@ -57,9 +57,14 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       pending: p.pending && ctx.pendingView(p.pending),
       streak: p.streak.count, streakBonusToday: p.daily.streakBonus,
       streakBonusTomorrow: season.streak.baseBonus + season.streak.perDay * (days - 1),
-      missions: p.daily.missions.map((id) => {
-        const m = season.missions.find((x) => x.id === id);
-        return { id, text: m.text, goal: m.goal, progress: Math.min(m.goal, ctx.missionProgress(p, m)), reward: m.reward, claimed: p.daily.claimed.includes(id) };
+      missions: p.daily.missions.map((e) => {
+        const m = season.missions.find((x) => x.id === e.id);
+        const n = season.npcs[e.giver];
+        return {
+          giver: e.giver, giverName: n.name, hood: n.hood, id: e.id, text: m.text, goal: m.goal, state: e.state,
+          progress: Math.min(m.goal, ctx.missionProgress(p, e)), reward: ctx.missionReward(e),
+          locked: !!n.hood && !p.unlocked.includes(n.hood),
+        };
       }),
       routeVisited: p.daily.routeVisited, raffleTickets: p.daily.raffleTickets,
       unlocked: p.unlocked,
@@ -110,6 +115,8 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       odds: strip(season.odds), houseTypes: season.houseTypes, dial: season.houses.dial,
       raffle: season.raffle, trophies: season.trophies,
       layout, travel: season.travel, dev: devMode,
+      npcs: Object.fromEntries(Object.entries(season.npcs).filter(([k]) => !k.startsWith('_'))), statInfo: season.statInfo,
+      stats: { windowPerCourageMs: season.scare.windowPerCourageMs, perSneak: season.ambush.perSneak, trapAvoidPerSneak: season.monster.trapAvoidPerSneak },
       outcomes: OUTCOMES, neighborhoods: season.neighborhoods.map(({ id, name, minLevel, unlockCost }) => ({ id, name, minLevel, unlockCost })),
       secretHouses: season.secretHouses,
     };
@@ -184,7 +191,8 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     craft: withPlayer((p, cardId) => ({ card: ctx.craft(p, cardId) })),
     mintCard: withPlayer((p, cardId) => ({ nft: ctx.mintCard(p, cardId) })),
     redeemPrize: withPlayer((p, prizeId) => ctx.redeemPrize(p, prizeId)),
-    claimMission: withPlayer((p, id) => ({ reward: ctx.claimMission(p, id) })),
+    acceptMission: withPlayer((p, giver, pos) => ctx.acceptMission(p, giver, pos)),
+    claimMission: withPlayer((p, giver, pos) => ({ reward: ctx.claimMission(p, giver, pos) })),
     claimBoo: withPlayer((p) => ({ claimed: ctx.claimBoo(p) })),
     faucet: withPlayer((p) => ({ received: ctx.faucet(p) })),
     buyDeed: withPlayer((p, houseId) => ctx.buyDeed(p, Number(houseId))),

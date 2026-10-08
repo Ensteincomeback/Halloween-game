@@ -49,6 +49,19 @@ lamps, windows, porch lights and the candle in your bucket.
 - **NPC homes vs. empty lots**: most houses are NPC homes. Dark, boarded-up houses with
   FOR SALE signs are the NFT lots; once bought they light up with the owner's sign.
 - **The Candy Bank** is a building in the square. Walk your bucket there and press `E`.
+- **Town shops**: the square is lined with shops you walk into: *Spooky Threads*
+  (costumes), *Sugar Rush* (boosts and upgrades), *Crypt Cards* (card crafting and minting),
+  the *Courage Dojo* (stat training) and the *Raffle Tent*. The menu's Shop tab sells the same things.
+- **Townsfolk missions**: Mayor Gourd (square), Old Mrs. Hollow (Hollow Lane), Gravedigger
+  Mort (Crypt Row) and Hazel the witch (Witchwood) each offer one mission a day. A **!**
+  means a new mission; walk up and press `E` to accept. Progress counts from then, and a
+  **?** means the reward is ready to collect from them. The Missions tab is a quest log with
+  📍 Track. Rewards scale with the neighborhood's candy multiplier.
+- **Stats explained**: Courage (+90 ms scare window per point), Sneak (−2% monster steal
+  chance per point, fewer ambushes, +5% trap dodge) and Luck (more rare-candy weight) are
+  described in the Dojo, the Me tab and How to Play.
+- **Settings** (`Esc` or ⚙): zoom, controls hint, replay tutorial, How to Play, the dev
+  panel in dev builds, **back to the main menu**, and log out.
 - **Tells are visible**: flickering or flashing windows, a big warm porch light, caramel
   steam from the chimney, a jack-o'-lantern, rustling bushes, claw marks on the door.
 - **Anti-teleport**: the server knows where every door, the bank and the gatekeepers are
@@ -58,8 +71,12 @@ lamps, windows, porch lights and the candle in your bucket.
 ## Dev build
 
 ```bash
-npm run dev        # same game + a dev panel (press ` or the red DEV button)
+npm run dev                    # same game + a dev panel (press ` or the red DEV button)
+node server/index.js --dev     # the same, without npm
 ```
+
+On Windows, `set DEV=1 && node server/index.js` also works (the trailing space `set`
+leaves in the value is ignored). The start menu shows **DEV BUILD** when it's on.
 
 The dev panel only exists when the server runs with `DEV=1`. Its `/api/dev/*` endpoints
 are not registered otherwise. It lets you skip the grind:

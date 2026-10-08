@@ -13,14 +13,16 @@ export function helpHtml(catalog) {
     ['💀', 'Gatekeepers', 'Crypt Row and Witchwood Heights are fenced. Their Gatekeepers let you in once you reach their level, or for a <b>one-time candy bribe</b>. Inside, candy is worth more.'],
     ['🏷️', 'Houses for sale', 'Dark houses with FOR SALE signs are empty lots: NFT deeds you can buy with $' + sym + '. Owners earn from real visitors, set the house\'s behavior (posted publicly, 24h delay) and add lanterns.'],
     ['😈', 'Be the monster', 'Stake $' + sym + ' for a Monster License and become a Scare Actor: set ambushes and traps at houses using Fright. Fail and you lose Fright and candy, never your stake.'],
-    ['📋', 'Missions & streaks', 'Three daily missions, a daily route (⭐), a Hot House (🔥 2× candy) and a forgiving streak bring you back every day.'],
-    ['🛍️', 'Shop & cards', 'Spend candy on costumes (each counters a monster), boosts, upgrades and stat training. Collect original monster cards and craft duplicates into rarer ones.'],
+    ['📋', 'Townsfolk missions', 'People with a <b>!</b> over their head have a mission for you: walk up and press <kbd>E</kbd>. When it shows <b>?</b>, go back for your reward. Mayor Gourd is in the square; others live in each neighborhood. Your Quest log (menu) tracks them.'],
+    ['🛍️', 'Town shops', 'Walk into the shops around the square: <b>Spooky Threads</b> (costumes), <b>Sugar Rush</b> (boosts &amp; upgrades), <b>Crypt Cards</b> (crafting), the <b>Courage Dojo</b> (training) and the <b>Raffle Tent</b>. The menu has the same shop too.'],
+    ['🦁', 'Stats', '<b>Courage</b> widens the scare timing window. <b>Sneak</b> lowers monster steal chance and helps you dodge traps. <b>Luck</b> makes rare treats more common. Train them at the Dojo; costumes add more.'],
+    ['🔥', 'Daily loop', 'A daily route (⭐), a Hot House (🔥 2× candy) and a forgiving streak bring you back every day.'],
     ['🏆', 'Leaderboards & sharing', 'Climb 11 leaderboards, post bounties on monsters who robbed you, and share cards of your best (and worst) moments.'],
   ];
   return `
     <h2>How to play</h2>
     <p class="muted small">Knock on doors. Collect candy. Survive monsters.</p>
     <div class="help-grid">${cards.map(([icon, title, text]) => `<div class="help-card"><div class="help-icon">${icon}</div><div><b>${title}</b><p>${text}</p></div></div>`).join('')}</div>
-    <p class="muted small">Keys: <kbd>E</kbd> act · <kbd>Tab</kbd> menu · <kbd>H</kbd> help${catalog.dev ? ' · <kbd>`</kbd> dev panel' : ''}</p>
+    <p class="muted small">Keys: <kbd>E</kbd> act · <kbd>Tab</kbd> menu · <kbd>H</kbd> help · <kbd>Esc</kbd> settings${catalog.dev ? ' · <kbd>`</kbd> dev panel' : ''}</p>
     <div class="actions"><button class="btn primary" data-close>Got it</button></div>`;
 }
