@@ -1,15 +1,15 @@
 // Candy sinks and token utility: shop, boosts, stat training, neighborhoods,
-// cosmetic raffle, monster cards, milestone prizes, banking, missions, claims.
+// monster cards, milestone prizes, banking, missions, claims.
 
 import crypto from 'node:crypto';
 import { GameError, MINUTE } from './core.js';
+import { toLamports, toSol } from './chain.js';
 
 export function installEconomy(ctx) {
   const { season, state, chain, rng } = ctx;
   const now = () => ctx.now();
   const sym = season.token.symbol;
 
-  state.raffle ??= {};
   state.redemptions ??= [];
 
   // ---------- banking ----------
@@ -33,8 +33,7 @@ export function installEconomy(ctx) {
       if (p.ownedCostumes.includes(itemId)) throw new GameError('Already owned');
       if (c.booPrice) {
         // Premium cosmetics: part burned, the rest is revenue that funds payouts.
-        const { paid } = chain.payWithBurn(p.wallet, 'treasury', c.booPrice, season.cosmeticBurnShare, `costume ${itemId}`);
-        ctx.revenue(paid);
+        ctx.payGame(p, 'BOO', c.booPrice, `costume ${itemId}`, season.cosmeticBurnShare);
       } else ctx.spend(p, c.price, 'costume');
       p.ownedCostumes.push(itemId);
       p.costume = itemId;
@@ -95,38 +94,6 @@ export function installEconomy(ctx) {
     return { bribed: !free, paid: free ? 0 : hood.unlockCost };
   };
 
-  // ---------- cosmetic raffle (prize is a non-transferable costume) ----------
-  ctx.buyRaffle = (p, n = 1) => {
-    const R = season.raffle;
-    n = Math.max(1, Math.round(Number(n)));
-    if (p.daily.raffleTickets + n > R.maxTicketsPerDay) throw new GameError(`Max ${R.maxTicketsPerDay} tickets a day`);
-    ctx.spend(p, R.ticketPrice * n, 'raffle');
-    p.daily.raffleTickets += n;
-    const d = ctx.today();
-    const pool = (state.raffle[d] ??= {});
-    pool[p.id] = (pool[p.id] || 0) + n;
-  };
-
-  ctx.drawRaffle = (day) => {
-    const pool = state.raffle[day];
-    delete state.raffle[day];
-    if (!pool) return null;
-    const total = Object.values(pool).reduce((a, b) => a + b, 0);
-    let r = rng() * total;
-    for (const [pid, n] of Object.entries(pool)) {
-      if ((r -= n) < 0) {
-        const p = state.players[pid];
-        const prize = season.raffle.prizeCostume;
-        if (!p.ownedCostumes.includes(prize)) p.ownedCostumes.push(prize);
-        else ctx.addStash(p, season.raffle.ticketPrice * 5, 'raffle');
-        ctx.notify(p, `You won the daily raffle: ${season.costumes[prize].name}!`);
-        ctx.pushFeed('raffle', `${p.name} won the daily raffle!`);
-        return p.id;
-      }
-    }
-    return null;
-  };
-
   // ---------- monster cards ----------
   ctx.drawCard = (minRarity = null) => {
     const C = season.cards;
@@ -169,7 +136,7 @@ export function installEconomy(ctx) {
 
   const hasFullDeck = (p) => season.cards.list.every((c) => p.cards[c.id] > 0 || chain.nftsOf(p.wallet, 'card').some((n) => n.meta.cardId === c.id));
 
-  // ---------- real-world prizes: milestones and rank only, never a random roll ----------
+  // ---------- milestone prizes (merch), earned by milestones and rank; raffle prizes live in raffle.js ----------
   ctx.prizeStatus = (p) => season.prizes.list.map((pr) => {
     const req = pr.requirement;
     let met = false;
@@ -218,6 +185,15 @@ export function installEconomy(ctx) {
     p.faucetDay = d;
     chain.transfer('liquidity', p.wallet, season.token.devnetFaucet, 'devnet faucet');
     return season.token.devnetFaucet;
+  };
+
+  // Devnet only: free test SOL (houses are bought with SOL).
+  ctx.solFaucet = (p) => {
+    const d = ctx.today();
+    if (p.solFaucetDay === d) throw new GameError('Devnet SOL faucet: once a day');
+    p.solFaucetDay = d;
+    chain.solTransfer('faucet', p.wallet, toLamports(season.token.devnetSolFaucet), 'devnet SOL faucet');
+    return season.token.devnetSolFaucet;
   };
 
   // ---------- missions (handed out by townsfolk) ----------
@@ -280,9 +256,10 @@ export function installEconomy(ctx) {
       candy: { in: candyIn, out: candyOut, totalIn: sum(candyIn), totalOut: sum(candyOut), sinkRatio: sum(candyIn) ? +(sum(candyOut) / sum(candyIn)).toFixed(2) : null },
       token: {
         symbol: sym, supply: c.supply.total, burned: c.supply.burned,
-        treasury: chain.bal('treasury'), rewardsVault: chain.bal('vault:rewards'), claimsVault: chain.bal('vault:claims'), staked: chain.bal('stake:pool'),
+        treasury: chain.bal('treasury'), treasurySol: toSol(chain.solBal('treasury')), rewardsVault: chain.bal('vault:rewards'), claimsVault: chain.bal('vault:claims'), staked: chain.bal('stake:pool'),
         epochRevenue: state.epoch.revenue, epoch: state.epoch.index,
       },
+      fees: ctx.feeReport(),
       chain: { height: c.height, head: c.head, valid: chain.verify(), anchors: c.anchors.slice(0, 5) },
     };
   };

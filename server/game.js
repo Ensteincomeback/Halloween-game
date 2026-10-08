@@ -7,7 +7,8 @@ import { installHouses } from './houses.js';
 import { installKnock, buildOdds, rollOutcome, OUTCOMES } from './knock.js';
 import { installMonsters } from './monsters.js';
 import { installEconomy } from './economy.js';
-import { createChain } from './chain.js';
+import { createChain, toSol } from './chain.js';
+import { installRaffle } from './raffle.js';
 import { seasonHash } from './config.js';
 import { buildLayout } from './layout.js';
 import { installDev } from './dev.js';
@@ -27,6 +28,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
   installHouses(ctx);
   installMonsters(ctx);
   installEconomy(ctx);
+  installRaffle(ctx);
 
   // Season registry: the active Season Pack's hash is anchored on-chain.
   const hash = seasonHash(season);
@@ -66,7 +68,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
           locked: !!n.hood && !p.unlocked.includes(n.hood),
         };
       }),
-      routeVisited: p.daily.routeVisited, raffleTickets: p.daily.raffleTickets,
+      routeVisited: p.daily.routeVisited,
       unlocked: p.unlocked,
       discovered: Object.entries(p.discovered).filter(([, n]) => n > 0).map(([id, n]) => ({ id: Number(id), knocks: n, name: state.houses[id].name })),
       seasonStats: { ...ss, uniqueHouses: undefined, housesVisited: ss.uniqueHouses.length },
@@ -75,13 +77,17 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       deepEconomy: deep,
       // The economy layer stays hidden until the player has played a while.
       wallet: deep ? {
-        address: p.wallet, boo: chain.bal(p.wallet), claimable: p.claimable,
+        address: p.wallet, boo: chain.bal(p.wallet), sol: toSol(chain.solBal(p.wallet)), claimable: p.claimable,
         houses: ctx.housesOwnedBy(p).map((h) => h.id),
         cards: chain.nftsOf(p.wallet, 'card').map((n) => ({ id: n.id, ...n.meta })),
-        faucetUsedToday: p.faucetDay === ctx.today(),
+        faucetUsedToday: p.faucetDay === ctx.today(), solFaucetUsedToday: p.solFaucetDay === ctx.today(),
       } : null,
       monster: deep ? ctx.monsterView(p) : null,
       prizes: ctx.prizeStatus(p),
+      rafflePrizes: Object.entries(p.redemptions).filter(([k]) => k.startsWith('raffle:'))
+        .map(([, r]) => ({ id: r.id, prize: r.prize, kind: r.kind, usd: r.usd, round: r.round, status: r.status, at: r.at }))
+        .sort((a, b) => b.at - a.at),
+      ownedHouses: ctx.housesOwnedBy(p).map((h) => ({ id: h.id, name: h.name, icon: season.houseTypes[h.type].icon, till: h.till })),
       gift,
     };
   }
@@ -97,7 +103,10 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       route: ctx.dailyRoute(),
       neighborhoods: season.neighborhoods.map(({ id, name, minLevel, unlockCost, candyMultiplier }) => ({ id, name, minLevel, unlockCost, candyMultiplier, unlocked: !!p?.unlocked.includes(id) })),
       houses,
-      legendaryEvent: { open: ctx.legendaryEventOpen(), hourUtc: season.legendaryEvent.hourUtc, houseId: season.legendaryEvent.houseId },
+      // Only whether it's open (and when it closes). The next opening stays secret.
+      legendaryEvent: { open: ctx.legendaryEventOpen(), closesAt: ctx.legendaryEventOpen() ? ctx.legendaryClosesAt() : null, openedAt: ctx.legendarySchedule().openedAt, houseId: season.legendaryEvent.houseId },
+      raffle: ctx.raffleView(p),
+      serverTime: now(),
       nightfallNames: season.nightfall.names,
       jackpotsLeftToday: season.rewards.jackpotGlobalDailyLimit - state.global.jackpotsToday,
     };
@@ -113,7 +122,9 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       monsterTypes: season.monster.types, monsterRules: { licenseStake: season.monster.licenseStake, warmupMs: season.monster.licenseWarmupMs },
       cards: season.cards.list, cardRules: { craftCost: season.cards.craftCost, craftDuplicates: season.cards.craftDuplicates },
       odds: strip(season.odds), houseTypes: season.houseTypes, dial: season.houses.dial,
-      raffle: season.raffle, trophies: season.trophies,
+      raffle: season.raffle, trophies: season.trophies, fees: { rate: season.fees.rate, split: season.fees.split },
+      legendaryRules: { minGapMinutes: season.legendaryEvent.minGapMinutes, maxGapMinutes: season.legendaryEvent.maxGapMinutes, openMinutes: season.legendaryEvent.openMinutes, entryFee: season.legendaryEvent.entryFee },
+      houseRules: { visitCandy: season.houses.visitCandy, ownerFeeShare: season.fees.split.houseOwners, marketFee: season.houses.marketFee },
       layout, travel: season.travel, dev: devMode,
       npcs: Object.fromEntries(Object.entries(season.npcs).filter(([k]) => !k.startsWith('_'))), statInfo: season.statInfo,
       stats: { windowPerCourageMs: season.scare.windowPerCourageMs, perSneak: season.ambush.perSneak, trapAvoidPerSneak: season.monster.trapAvoidPerSneak },
@@ -187,7 +198,17 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     equip: withPlayer((p, id) => ctx.equip(p, id)),
     train: withPlayer((p, stat) => ctx.train(p, stat)),
     unlock: withPlayer((p, hoodId, pos) => ctx.unlockHood(p, hoodId, pos)),
-    raffle: withPlayer((p, n) => ctx.buyRaffle(p, n)),
+    raffle: withPlayer((p, n, free) => ctx.buyRaffle(p, n, !!free)),
+    claimRafflePrize: withPlayer((p, id, details) => ctx.claimRafflePrize(p, id, details)),
+    auctions: (token) => ctx.auctionsView(token && state.tokens[token] ? ctx.playerByToken(token) : null),
+    createAuction: withPlayer((p, opts) => ctx.createAuction(p, opts)),
+    enterAuction: withPlayer((p, id, n) => ctx.enterAuction(p, id, n)),
+    cancelAuction: withPlayer((p, id) => ctx.cancelAuction(p, id)),
+    solFaucet: withPlayer((p) => ({ received: ctx.solFaucet(p) })),
+    tick: () => {
+      ctx.tickWorld();
+      onChange();
+    },
     craft: withPlayer((p, cardId) => ({ card: ctx.craft(p, cardId) })),
     mintCard: withPlayer((p, cardId) => ({ nft: ctx.mintCard(p, cardId) })),
     redeemPrize: withPlayer((p, prizeId) => ctx.redeemPrize(p, prizeId)),
@@ -223,7 +244,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     market() {
       return Object.values(chain.state.listings).map((l) => {
         const h = Object.values(state.houses).find((x) => x.deed === l.id);
-        return { houseId: h.id, name: h.name, type: h.type, icon: season.houseTypes[h.type].icon, price: l.price, seller: ctx.playerByWallet(l.seller)?.name, reputation: ctx.reputation(h) };
+        return { houseId: h.id, name: h.name, type: h.type, icon: season.houseTypes[h.type].icon, price: l.currency === 'SOL' ? toSol(l.price) : l.price, currency: l.currency || 'BOO', seller: ctx.playerByWallet(l.seller)?.name, reputation: ctx.reputation(h) };
       });
     },
     leaderboards,

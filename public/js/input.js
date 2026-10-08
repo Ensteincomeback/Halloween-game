@@ -1,8 +1,8 @@
 // Player input: WASD / arrows to move (Shift to run), hold-and-release E or
-// Space at a door to knock, Tab/M for the menu, H for help, ` for the dev panel.
+// Space at a door to knock, Tab/M for the menu, I for the bag, H for help, ` for the dev panel.
 // Touch devices get a floating joystick and an action button.
 
-export function createInput(surface, { onActionDown, onActionUp, onMenu, onHelp, onDev }) {
+export function createInput(surface, { onActionDown, onActionUp, onMenu, onHelp, onDev, onBag }) {
   const keys = new Set();
   const state = { joy: { x: 0, y: 0 }, enabled: true };
   const typing = () => ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -22,6 +22,7 @@ export function createInput(surface, { onActionDown, onActionUp, onMenu, onHelp,
       return onMenu();
     }
     if (k === 'h' || k === '?') return onHelp?.();
+    if (k === 'i') return onBag?.();
     keys.add(k);
   });
   window.addEventListener('keyup', (e) => {

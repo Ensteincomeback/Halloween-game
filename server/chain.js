@@ -6,6 +6,11 @@
 
 import crypto from 'node:crypto';
 
+// SOL amounts are stored in lamports (1 SOL = 1e9 lamports), like on Solana.
+export const LAMPORTS = 1_000_000_000;
+export const toLamports = (sol) => Math.round(Number(sol) * LAMPORTS);
+export const toSol = (lamports) => Math.round(lamports / 1e6) / 1000;
+
 export class ChainError extends Error {
   constructor(message) {
     super(message);
@@ -29,6 +34,8 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     anchors: [],
     supply: { total: 0, burned: 0 },
   });
+  // Native SOL balances (lamports). Devnet: the faucet account is pre-funded.
+  c.sol ??= { faucet: 1_000_000 * LAMPORTS };
 
   function commit(type, data) {
     const tx = { type, ...data, time: now() };
@@ -71,6 +78,19 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     c.supply.burned += amt;
     return commit('burn', { from, amt, memo });
   }
+
+  // ---------- native SOL ----------
+  const solBal = (a) => c.sol[a] || 0;
+  function solTransfer(from, to, lamports, memo) {
+    if (!Number.isInteger(lamports) || lamports <= 0) throw new ChainError('Amount must be positive');
+    if (solBal(from) < lamports) throw new ChainError('Insufficient SOL');
+    c.sol[from] -= lamports;
+    c.sol[to] = solBal(to) + lamports;
+    return commit('sol-transfer', { from, to, lamports, memo });
+  }
+  // Move `amt` of either currency.
+  const move = (currency, from, to, amt, memo) => (currency === 'SOL' ? solTransfer(from, to, amt, memo) : transfer(from, to, amt, memo));
+  const balOf = (currency, a) => (currency === 'SOL' ? solBal(a) : bal(a));
 
   // Pay `amt`, burning `burnShare` of it and sending the rest to `to`.
   function payWithBurn(from, to, amt, burnShare, memo) {
@@ -137,11 +157,12 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
   const nftsOf = (owner, kind) => Object.values(c.nfts).filter((n) => n.owner === owner && (!kind || n.kind === kind));
 
   // ---------- marketplace escrow ----------
-  function list(id, seller, price) {
+  // `currency` is 'BOO' or 'SOL' (price in lamports for SOL).
+  function list(id, seller, price, currency = 'BOO') {
     if (!Number.isInteger(price) || price <= 0) throw new ChainError('Price must be a positive whole number');
     transferNft(id, seller, 'escrow', 'listed');
-    c.listings[id] = { id, seller, price, time: now() };
-    commit('list', { id, seller, price });
+    c.listings[id] = { id, seller, price, currency, time: now() };
+    commit('list', { id, seller, price, currency });
   }
 
   function cancel(id, seller) {
@@ -151,18 +172,20 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     transferNft(id, 'escrow', seller, 'delisted');
   }
 
-  function buy(id, buyer, { fee, feeBurnShare }) {
+  // The fee is sent to `feeTo` (the game's fee router splits it from there).
+  function buy(id, buyer, { fee, feeTo = 'treasury' }) {
     const l = c.listings[id];
     if (!l) throw new ChainError('Not for sale');
     if (l.seller === buyer) throw new ChainError('That is your own listing');
-    need(buyer, l.price);
+    const cur = l.currency || 'BOO';
+    if (balOf(cur, buyer) < l.price) throw new ChainError(`Insufficient ${cur === 'SOL' ? 'SOL' : '$' + token.symbol}`);
     const cut = Math.floor(l.price * fee);
-    transfer(buyer, l.seller, l.price - cut, `sale ${id}`);
-    if (cut > 0) payWithBurn(buyer, 'treasury', cut, feeBurnShare, `market fee ${id}`);
+    move(cur, buyer, l.seller, l.price - cut, `sale ${id}`);
+    if (cut > 0) move(cur, buyer, feeTo, cut, `market fee ${id}`);
     delete c.listings[id];
     transferNft(id, 'escrow', buyer, 'sold');
     c.nfts[id].lastPrice = l.price;
-    return { price: l.price, fee: cut };
+    return { price: l.price, fee: cut, currency: cur };
   }
 
   // ---------- signed reward claims ----------
@@ -198,7 +221,7 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
   }
 
   return {
-    state: c, bal, transfer, burn, payWithBurn, stake, unstake, slash, stakeOf,
+    state: c, bal, solBal, solTransfer, move, balOf, transfer, burn, payWithBurn, stake, unstake, slash, stakeOf,
     mintNft, transferNft, nftsOf, list, cancel, buy, signClaim, claim, anchor, verify,
     recent: (n = 30) => c.blocks.slice(-n).reverse(),
   };

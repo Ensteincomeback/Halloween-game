@@ -2,7 +2,6 @@
   "id": "halloween-2026",
   "name": "Halloween",
   "tagline": "90% Tricks. 10% Treats.",
-
   "odds": {
     "_comment": "Baseline per-knock weights (percent). 65% pay out, 35% trick / scare / monster.",
     "candy": 40,
@@ -16,67 +15,102 @@
     "scare": 10,
     "ambush": 5
   },
-
   "caps": {
     "_comment": "Protocol bounds: house types, owner dials and moods shift the table, never rewrite it.",
     "maxShiftPerOutcome": 14,
     "minCandyWeight": 20
   },
-
   "rewards": {
-    "candy": [3, 6],
+    "candy": [
+      3,
+      6
+    ],
     "bigCandyMultiplier": 3,
     "rareMultiplier": 6,
-    "trickLoss": [1, 3],
-    "scareLoss": [2, 5],
-    "legendaryCandy": [80, 120],
+    "trickLoss": [
+      1,
+      3
+    ],
+    "scareLoss": [
+      2,
+      5
+    ],
+    "legendaryCandy": [
+      80,
+      120
+    ],
     "legendaryTrophyCandy": 40,
     "jackpotCandy": 300,
     "jackpotShareOfLegendary": 0.05,
     "jackpotGlobalDailyLimit": 3,
-    "ambushDefendCandy": [4, 8],
-    "token": [1, 5],
+    "ambushDefendCandy": [
+      4,
+      8
+    ],
+    "token": [
+      1,
+      5
+    ],
     "tokenDailyCap": 25,
     "tokenMinTrust": 50,
     "secretHouseKnocks": 5
   },
-
-  "pity": { "rareOrBetterWithin": 40 },
-
+  "pity": {
+    "rareOrBetterWithin": 40
+  },
   "travel": {
     "_comment": "Players walk the 3D world. The server rejects actions that would need faster-than-running travel since the last one (anti-teleport).",
     "maxSpeed": 14,
     "graceMs": 2000,
     "bankRadius": 6
   },
-
-  "energy": { "dailyFree": 30, "regenMinutes": 20, "regenCap": 30, "hardCap": 45 },
-
+  "energy": {
+    "dailyFree": 30,
+    "regenMinutes": 20,
+    "regenCap": 30,
+    "hardCap": 45
+  },
   "statInfo": {
     "courage": "Steadier nerves. Each point widens the scare mini-game's timing window by 90 ms, so jump-scares are easier to survive.",
     "sneak": "Harder to catch. Each point lowers a monster's chance to steal from you by 2%, makes monster ambushes a little rarer, and helps you spot and step over traps (+5% per point).",
     "luck": "Fortune favors you. Each point adds rare-candy weight to every knock, so better treats come up more often."
   },
-
   "player": {
     "bagCapacity": 120,
     "stashCapacity": 1000,
-    "baseStats": { "courage": 1, "sneak": 1, "luck": 1 },
+    "baseStats": {
+      "courage": 1,
+      "sneak": 1,
+      "luck": 1
+    },
     "maxTrainedStat": 5,
     "trainBaseCost": 60,
     "deepEconomyLevel": 3
   },
-
   "nightfall": {
     "knocksPerLevel": 8,
     "maxLevel": 3,
-    "perLevel": { "candy": -3, "scare": 2, "ambush": 1 },
+    "perLevel": {
+      "candy": -3,
+      "scare": 2,
+      "ambush": 1
+    },
     "candyBonusPerLevel": 0.15,
-    "names": ["Dusk", "Twilight", "Nightfall", "Witching Hour"]
+    "names": [
+      "Dusk",
+      "Twilight",
+      "Nightfall",
+      "Witching Hour"
+    ]
   },
-
-  "scare": { "minDelayMs": 700, "maxDelayMs": 2200, "minHumanMs": 110, "baseWindowMs": 900, "windowPerCourageMs": 90, "expireMs": 30000 },
-
+  "scare": {
+    "minDelayMs": 700,
+    "maxDelayMs": 2200,
+    "minHumanMs": 110,
+    "baseWindowMs": 900,
+    "windowPerCourageMs": 90,
+    "expireMs": 30000
+  },
   "ambush": {
     "npcBaseSuccess": 0.5,
     "playerBaseSuccess": 0.55,
@@ -95,7 +129,6 @@
     "expireMs": 60000,
     "newPlayerGraceKnocks": 10
   },
-
   "monster": {
     "_comment": "Scare Actors: stake $BOO as a bond (slashed only for abuse), spend Fright to set lairs.",
     "licenseStake": 200,
@@ -111,180 +144,849 @@
     "failFine": 5,
     "failForfeitShare": 0.05,
     "stunMinutes": 10,
-    "trapLoss": [3, 6],
+    "trapLoss": [
+      3,
+      6
+    ],
     "trapAvoidBase": 0.15,
     "trapAvoidPerSneak": 0.05,
     "houseTax": 0.1,
     "bountyMin": 10,
     "types": {
-      "ghost":   { "name": "Ghost",   "icon": "👻", "counter": "salt",   "perk": "Stealth: +5% steal chance",         "successBonus": 0.05 },
-      "zombie":  { "name": "Zombie",  "icon": "🧟", "counter": "torch",  "perk": "Resilient: failures cost half",     "failMultiplier": 0.5 },
-      "vampire": { "name": "Vampire", "icon": "🧛", "counter": "garlic", "perk": "Drain: steals up to 12% of a bag",  "stealShare": 0.12 },
-      "witch":   { "name": "Witch",   "icon": "🧙", "counter": "mirror", "perk": "Hexes: traps are cheaper and nastier", "trapFright": 12, "trapBonus": 2 }
+      "ghost": {
+        "name": "Ghost",
+        "icon": "👻",
+        "counter": "salt",
+        "perk": "Stealth: +5% steal chance",
+        "successBonus": 0.05
+      },
+      "zombie": {
+        "name": "Zombie",
+        "icon": "🧟",
+        "counter": "torch",
+        "perk": "Resilient: failures cost half",
+        "failMultiplier": 0.5
+      },
+      "vampire": {
+        "name": "Vampire",
+        "icon": "🧛",
+        "counter": "garlic",
+        "perk": "Drain: steals up to 12% of a bag",
+        "stealShare": 0.12
+      },
+      "witch": {
+        "name": "Witch",
+        "icon": "🧙",
+        "counter": "mirror",
+        "perk": "Hexes: traps are cheaper and nastier",
+        "trapFright": 12,
+        "trapBonus": 2
+      }
     }
   },
-
   "trust": {
-    "start": 50, "max": 80, "minKnockIntervalMs": 400, "lowTrust": 30, "lowTrustMultiplier": 0.5,
-    "legendaryMinTrust": 40, "prizeMinTrust": 60, "accountsPerIpPerHour": 5
+    "start": 50,
+    "max": 80,
+    "minKnockIntervalMs": 400,
+    "lowTrust": 30,
+    "lowTrustMultiplier": 0.5,
+    "legendaryMinTrust": 40,
+    "prizeMinTrust": 60,
+    "accountsPerIpPerHour": 5
   },
-
-  "dailyCandy": { "softCap": 400, "softMultiplier": 0.5, "hardCap": 800, "hardMultiplier": 0.1 },
-
-  "streak": { "baseBonus": 10, "perDay": 5, "maxDays": 7 },
-
+  "dailyCandy": {
+    "softCap": 400,
+    "softMultiplier": 0.5,
+    "hardCap": 800,
+    "hardMultiplier": 0.1
+  },
+  "streak": {
+    "baseBonus": 10,
+    "perDay": 5,
+    "maxDays": 7
+  },
   "_neighborhoods": "plots = indexes of empty houses: NFT lots players can buy. Every other house is an NPC home.",
   "neighborhoods": [
-    { "id": "hollow-lane", "name": "Hollow Lane", "minLevel": 1, "unlockCost": 0, "candyMultiplier": 1, "plots": [2, 3, 7, 12, 19],
-      "types": ["normal", "normal", "pumpkin", "haunted", "normal", "witch", "normal", "graveyard", "normal", "zombie",
-                "normal", "pumpkin", "witch", "normal", "haunted", "graveyard", "normal", "zombie", "normal", "normal"],
-      "names": ["The Hendersons", "Blue Shutters", "Old Gourd Patch", "Ashgrove Manor", "The Pattersons", "Crooked Chimney",
-                "Maple Duplex", "Old Chapel Yard", "Yellow Door", "Rotting Cottage", "The Okafors", "Sunny Pumpkins",
-                "Bramble Hollow", "The Nguyens", "Wailing Villa", "Mosswick Plot", "The Garcias", "Groaning Bungalow",
-                "White Picket", "Last House on the Lane"] },
-    { "id": "crypt-row", "name": "Crypt Row", "minLevel": 4, "unlockCost": 150, "candyMultiplier": 1.5, "plots": [1, 4, 10], "mods": { "ambush": 2, "scare": 2, "candy": -4 },
-      "types": ["haunted", "vampire", "graveyard", "zombie", "mansion", "witch", "graveyard", "vampire", "haunted", "zombie", "lab", "mansion"],
-      "names": ["Blackwood Hall", "Castle Nocturne", "Lantern Graves", "The Shamblers", "Hemlock Estate", "Cauldron Cabin",
-                "Elmwood Cemetery", "Crimson Keep", "Vesper House", "Bonepile Place", "Dr. Grimm's Annex", "Raven's Rest"] },
-    { "id": "witchwood", "name": "Witchwood Heights", "minLevel": 8, "unlockCost": 400, "candyMultiplier": 2, "plots": [0, 2, 9], "mods": { "ambush": 3, "scare": 3, "legendary": 0.5, "candy": -6.5 },
-      "types": ["mansion", "lab", "vampire", "witch", "haunted", "mansion", "graveyard", "lab", "vampire", "pumpkin"],
-      "names": ["Thornfield Manor", "Laboratory 13", "Count's Summer Home", "Coven Cottage", "The Screaming House",
-                "Gravesend Hall", "Saint Morrow's Yard", "Voltage Tower", "Duskmere Castle", "The Great Pumpkin Farm"] }
+    {
+      "id": "hollow-lane",
+      "name": "Hollow Lane",
+      "minLevel": 1,
+      "unlockCost": 0,
+      "candyMultiplier": 1,
+      "plots": [
+        2,
+        3,
+        7,
+        12,
+        19
+      ],
+      "types": [
+        "normal",
+        "normal",
+        "pumpkin",
+        "haunted",
+        "normal",
+        "witch",
+        "normal",
+        "graveyard",
+        "normal",
+        "zombie",
+        "normal",
+        "pumpkin",
+        "witch",
+        "normal",
+        "haunted",
+        "graveyard",
+        "normal",
+        "zombie",
+        "normal",
+        "normal"
+      ],
+      "names": [
+        "The Hendersons",
+        "Blue Shutters",
+        "Old Gourd Patch",
+        "Ashgrove Manor",
+        "The Pattersons",
+        "Crooked Chimney",
+        "Maple Duplex",
+        "Old Chapel Yard",
+        "Yellow Door",
+        "Rotting Cottage",
+        "The Okafors",
+        "Sunny Pumpkins",
+        "Bramble Hollow",
+        "The Nguyens",
+        "Wailing Villa",
+        "Mosswick Plot",
+        "The Garcias",
+        "Groaning Bungalow",
+        "White Picket",
+        "Last House on the Lane"
+      ]
+    },
+    {
+      "id": "crypt-row",
+      "name": "Crypt Row",
+      "minLevel": 4,
+      "unlockCost": 150,
+      "candyMultiplier": 1.5,
+      "plots": [
+        1,
+        4,
+        10
+      ],
+      "mods": {
+        "ambush": 2,
+        "scare": 2,
+        "candy": -4
+      },
+      "types": [
+        "haunted",
+        "vampire",
+        "graveyard",
+        "zombie",
+        "mansion",
+        "witch",
+        "graveyard",
+        "vampire",
+        "haunted",
+        "zombie",
+        "lab",
+        "mansion"
+      ],
+      "names": [
+        "Blackwood Hall",
+        "Castle Nocturne",
+        "Lantern Graves",
+        "The Shamblers",
+        "Hemlock Estate",
+        "Cauldron Cabin",
+        "Elmwood Cemetery",
+        "Crimson Keep",
+        "Vesper House",
+        "Bonepile Place",
+        "Dr. Grimm's Annex",
+        "Raven's Rest"
+      ]
+    },
+    {
+      "id": "witchwood",
+      "name": "Witchwood Heights",
+      "minLevel": 8,
+      "unlockCost": 400,
+      "candyMultiplier": 2,
+      "plots": [
+        0,
+        2,
+        9
+      ],
+      "mods": {
+        "ambush": 3,
+        "scare": 3,
+        "legendary": 0.5,
+        "candy": -6.5
+      },
+      "types": [
+        "mansion",
+        "lab",
+        "vampire",
+        "witch",
+        "haunted",
+        "mansion",
+        "graveyard",
+        "lab",
+        "vampire",
+        "pumpkin"
+      ],
+      "names": [
+        "Thornfield Manor",
+        "Laboratory 13",
+        "Count's Summer Home",
+        "Coven Cottage",
+        "The Screaming House",
+        "Gravesend Hall",
+        "Saint Morrow's Yard",
+        "Voltage Tower",
+        "Duskmere Castle",
+        "The Great Pumpkin Farm"
+      ]
+    }
   ],
-
   "secretHouses": [
-    { "id": 901, "name": "The Hollow Crown", "type": "legendary" },
-    { "id": 902, "name": "Midnight Laboratory", "type": "lab" },
-    { "id": 903, "name": "Pumpkin King's Patch", "type": "pumpkin" }
+    {
+      "id": 901,
+      "name": "The Hollow Crown",
+      "type": "legendary"
+    },
+    {
+      "id": 902,
+      "name": "Midnight Laboratory",
+      "type": "lab"
+    },
+    {
+      "id": 903,
+      "name": "Pumpkin King's Patch",
+      "type": "pumpkin"
+    }
   ],
-
   "legendaryEvent": {
-    "_comment": "Each day, for one hour (UTC), the Legendary Mansion opens to everyone.",
-    "hourUtc": 23, "houseId": 901, "entryFee": 20
+    "_comment": "The Legendary Mansion appears at a random time every 20-40 minutes and stays a few minutes. The next opening is never published, so camping it doesn't work.",
+    "minGapMinutes": 20,
+    "maxGapMinutes": 40,
+    "openMinutes": 5,
+    "houseId": 901,
+    "entryFee": 20
   },
-
   "houseTypes": {
-    "normal":    { "name": "Normal House",       "icon": "🏠", "mods": {},                                                            "price": 300 },
-    "pumpkin":   { "name": "Pumpkin Farm",       "icon": "🎃", "mods": { "candy": 4, "bigCandy": 3, "trick": -3, "scare": -4 },        "price": 600 },
-    "haunted":   { "name": "Haunted House",      "icon": "🏚️", "mods": { "scare": 6, "rare": 2, "candy": -8 }, "rareValueMultiplier": 1.5, "price": 800 },
-    "witch":     { "name": "Witch Hut",          "icon": "🧙", "mods": { "trick": 5, "collectible": 2, "candy": -7 },                  "price": 500 },
-    "zombie":    { "name": "Zombie House",       "icon": "🧟", "mods": { "ambush": 4, "bigCandy": 2, "candy": -6 },                    "price": 500 },
-    "graveyard": { "name": "Graveyard",          "icon": "🪦", "mods": { "ambush": 3, "collectible": 2, "legendary": 0.5, "candy": -5.5 }, "price": 700 },
-    "vampire":   { "name": "Vampire Castle",     "icon": "🦇", "mods": { "scare": 4, "rare": 3, "legendary": 0.5, "candy": -7.5 }, "entryFee": 5, "price": 1200 },
-    "mansion":   { "name": "Abandoned Mansion",  "icon": "🏰", "mods": { "scare": 5, "ambush": 2, "legendary": 1, "secretHouse": 0.5, "candy": -8.5 }, "entryFee": 5, "price": 1500 },
-    "lab":       { "name": "Secret Laboratory",  "icon": "🧪", "mods": { "token": 2, "collectible": 2, "trick": 3, "candy": -7 },  "entryFee": 8, "price": 1500 },
-    "legendary": { "name": "Legendary Mansion",  "icon": "👑", "mods": { "legendary": 4, "rare": 4, "token": 2, "scare": 4, "candy": -14 }, "rareValueMultiplier": 2, "secret": true }
+    "normal": {
+      "name": "Normal House",
+      "icon": "🏠",
+      "mods": {},
+      "solPrice": 0.3
+    },
+    "pumpkin": {
+      "name": "Pumpkin Farm",
+      "icon": "🎃",
+      "mods": {
+        "candy": 4,
+        "bigCandy": 3,
+        "trick": -3,
+        "scare": -4
+      },
+      "solPrice": 0.6
+    },
+    "haunted": {
+      "name": "Haunted House",
+      "icon": "🏚️",
+      "mods": {
+        "scare": 6,
+        "rare": 2,
+        "candy": -8
+      },
+      "rareValueMultiplier": 1.5,
+      "solPrice": 0.8
+    },
+    "witch": {
+      "name": "Witch Hut",
+      "icon": "🧙",
+      "mods": {
+        "trick": 5,
+        "collectible": 2,
+        "candy": -7
+      },
+      "solPrice": 0.5
+    },
+    "zombie": {
+      "name": "Zombie House",
+      "icon": "🧟",
+      "mods": {
+        "ambush": 4,
+        "bigCandy": 2,
+        "candy": -6
+      },
+      "solPrice": 0.5
+    },
+    "graveyard": {
+      "name": "Graveyard",
+      "icon": "🪦",
+      "mods": {
+        "ambush": 3,
+        "collectible": 2,
+        "legendary": 0.5,
+        "candy": -5.5
+      },
+      "solPrice": 0.7
+    },
+    "vampire": {
+      "name": "Vampire Castle",
+      "icon": "🦇",
+      "mods": {
+        "scare": 4,
+        "rare": 3,
+        "legendary": 0.5,
+        "candy": -7.5
+      },
+      "entryFee": 5,
+      "solPrice": 1.2
+    },
+    "mansion": {
+      "name": "Abandoned Mansion",
+      "icon": "🏰",
+      "mods": {
+        "scare": 5,
+        "ambush": 2,
+        "legendary": 1,
+        "secretHouse": 0.5,
+        "candy": -8.5
+      },
+      "entryFee": 5,
+      "solPrice": 1.5
+    },
+    "lab": {
+      "name": "Secret Laboratory",
+      "icon": "🧪",
+      "mods": {
+        "token": 2,
+        "collectible": 2,
+        "trick": 3,
+        "candy": -7
+      },
+      "entryFee": 8,
+      "solPrice": 1.5
+    },
+    "legendary": {
+      "name": "Legendary Mansion",
+      "icon": "👑",
+      "mods": {
+        "legendary": 4,
+        "rare": 4,
+        "token": 2,
+        "scare": 4,
+        "candy": -14
+      },
+      "rareValueMultiplier": 2,
+      "secret": true
+    }
   },
-
   "houses": {
     "maxPerWallet": 3,
     "entryFeeOwnerShare": 0.5,
     "dialTimelockMs": 86400000,
-    "lantern": { "maxLevel": 3, "prices": [100, 200, 400], "burnShare": 0.5, "poolWeightPerLevel": 0.1 },
+    "lantern": {
+      "maxLevel": 3,
+      "prices": [
+        100,
+        200,
+        400
+      ],
+      "burnShare": 0.5,
+      "poolWeightPerLevel": 0.1
+    },
     "marketFee": 0.05,
-    "marketFeeBurnShare": 0.5,
     "routeLength": 5,
     "dial": {
-      "generous": { "name": "Generous", "mods": { "candy": 6, "rare": 2, "trick": -4, "scare": -4 } },
-      "balanced": { "name": "Balanced", "mods": {} },
-      "haunted":  { "name": "Haunted",  "mods": { "scare": 6, "ambush": 2, "rare": 2, "candy": -10 } }
-    }
+      "generous": {
+        "name": "Generous",
+        "mods": {
+          "candy": 6,
+          "rare": 2,
+          "trick": -4,
+          "scare": -4
+        }
+      },
+      "balanced": {
+        "name": "Balanced",
+        "mods": {}
+      },
+      "haunted": {
+        "name": "Haunted",
+        "mods": {
+          "scare": 6,
+          "ambush": 2,
+          "rare": 2,
+          "candy": -10
+        }
+      }
+    },
+    "_comment": "Deeds are bought and resold in SOL. Owners get candy from each new visitor per day and a share of all transaction fees.",
+    "visitCandy": 2
   },
-
   "moods": {
     "tellAccuracy": 0.75,
     "list": {
-      "generous": { "weight": 3, "mods": { "candy": 5, "rare": 1, "trick": -3, "scare": -3 }, "tells": ["A warm porch light glows", "It smells like caramel"] },
-      "balanced": { "weight": 4, "mods": {}, "tells": ["A jack-o'-lantern grins", "The house is quiet"] },
-      "spooky":   { "weight": 2, "mods": { "scare": 5, "trick": 2, "candy": -7 }, "tells": ["The lights are flickering", "A scream from the attic"] },
-      "prowled":  { "weight": 1, "mods": { "ambush": 4, "candy": -4 }, "tells": ["Strange noises in the bushes", "Claw marks on the gate"] }
+      "generous": {
+        "weight": 3,
+        "mods": {
+          "candy": 5,
+          "rare": 1,
+          "trick": -3,
+          "scare": -3
+        },
+        "tells": [
+          "A warm porch light glows",
+          "It smells like caramel"
+        ]
+      },
+      "balanced": {
+        "weight": 4,
+        "mods": {},
+        "tells": [
+          "A jack-o'-lantern grins",
+          "The house is quiet"
+        ]
+      },
+      "spooky": {
+        "weight": 2,
+        "mods": {
+          "scare": 5,
+          "trick": 2,
+          "candy": -7
+        },
+        "tells": [
+          "The lights are flickering",
+          "A scream from the attic"
+        ]
+      },
+      "prowled": {
+        "weight": 1,
+        "mods": {
+          "ambush": 4,
+          "candy": -4
+        },
+        "tells": [
+          "Strange noises in the bushes",
+          "Claw marks on the gate"
+        ]
+      }
     }
   },
-
   "npcMonsters": [
-    { "id": "wisp",   "name": "Old Wisp",    "type": "ghost",    "clue": "A cold draft passes straight through you..." },
-    { "id": "lurker", "name": "The Lurker",  "type": "shade",    "clue": "The shadows on the sidewalk start to move..." },
-    { "id": "nibble", "name": "Count Nibble","type": "vampire",  "clue": "A cape swishes and someone says 'bleh'..." },
-    { "id": "fuzz",   "name": "Fuzzbert",    "type": "werewolf", "clue": "Something big and hairy is panting behind the hedge..." },
-    { "id": "shamble","name": "Shambles",    "type": "zombie",   "clue": "A slow groan. Something is dragging its feet toward you..." },
-    { "id": "hex",    "name": "Granny Hex",  "type": "witch",    "clue": "A cackle, and the smell of burnt sugar..." }
+    {
+      "id": "wisp",
+      "name": "Old Wisp",
+      "type": "ghost",
+      "clue": "A cold draft passes straight through you..."
+    },
+    {
+      "id": "lurker",
+      "name": "The Lurker",
+      "type": "shade",
+      "clue": "The shadows on the sidewalk start to move..."
+    },
+    {
+      "id": "nibble",
+      "name": "Count Nibble",
+      "type": "vampire",
+      "clue": "A cape swishes and someone says 'bleh'..."
+    },
+    {
+      "id": "fuzz",
+      "name": "Fuzzbert",
+      "type": "werewolf",
+      "clue": "Something big and hairy is panting behind the hedge..."
+    },
+    {
+      "id": "shamble",
+      "name": "Shambles",
+      "type": "zombie",
+      "clue": "A slow groan. Something is dragging its feet toward you..."
+    },
+    {
+      "id": "hex",
+      "name": "Granny Hex",
+      "type": "witch",
+      "clue": "A cackle, and the smell of burnt sugar..."
+    }
   ],
-
-  "monsterCounters": { "ghost": "salt", "shade": "flashlight", "vampire": "garlic", "werewolf": "bell", "zombie": "torch", "witch": "mirror" },
-
+  "monsterCounters": {
+    "ghost": "salt",
+    "shade": "flashlight",
+    "vampire": "garlic",
+    "werewolf": "bell",
+    "zombie": "torch",
+    "witch": "mirror"
+  },
   "counters": {
-    "salt":       { "name": "Salt",        "icon": "🧂" },
-    "flashlight": { "name": "Flashlight",  "icon": "🔦" },
-    "garlic":     { "name": "Garlic",      "icon": "🧄" },
-    "bell":       { "name": "Silver Bell", "icon": "🔔" },
-    "torch":      { "name": "Torch",       "icon": "🔥" },
-    "mirror":     { "name": "Mirror",      "icon": "🪞" }
+    "salt": {
+      "name": "Salt",
+      "icon": "🧂"
+    },
+    "flashlight": {
+      "name": "Flashlight",
+      "icon": "🔦"
+    },
+    "garlic": {
+      "name": "Garlic",
+      "icon": "🧄"
+    },
+    "bell": {
+      "name": "Silver Bell",
+      "icon": "🔔"
+    },
+    "torch": {
+      "name": "Torch",
+      "icon": "🔥"
+    },
+    "mirror": {
+      "name": "Mirror",
+      "icon": "🪞"
+    }
   },
-
   "costumes": {
-    "sheet":     { "name": "Bedsheet Ghost",    "icon": "👻", "price": 0,   "stats": {},                           "counters": null },
-    "witch":     { "name": "Witch",             "icon": "🧹", "price": 60,  "stats": { "luck": 1 },                "counters": "ghost" },
-    "mummy":     { "name": "Mummy",             "icon": "🩹", "price": 90,  "stats": { "courage": 1, "sneak": 1 }, "counters": "werewolf" },
-    "werewolf":  { "name": "Werewolf",          "icon": "🐺", "price": 120, "stats": { "sneak": 2 },               "counters": "vampire" },
-    "vampire":   { "name": "Vampire",           "icon": "🧛", "price": 150, "stats": { "courage": 2 },             "counters": "shade" },
-    "hunter":    { "name": "Monster Hunter",    "icon": "🏹", "price": 180, "stats": { "courage": 1, "sneak": 1 }, "counters": "witch" },
-    "skeleton":  { "name": "Skeleton",          "icon": "💀", "price": 220, "stats": { "courage": 1, "luck": 2 },  "counters": "zombie" },
-    "headless":  { "name": "Headless Horseman", "icon": "🐎", "booPrice": 150, "stats": { "courage": 2, "luck": 1 }, "counters": "werewolf" },
-    "pumpkinking": { "name": "Pumpkin King",    "icon": "🤴", "booPrice": 300, "stats": { "luck": 2, "sneak": 1 }, "counters": "ghost" },
-    "banshee":   { "name": "Moonlit Banshee",   "icon": "🌙", "raffleOnly": true, "stats": { "luck": 1, "courage": 1 }, "counters": "shade" }
+    "sheet": {
+      "name": "Bedsheet Ghost",
+      "icon": "👻",
+      "price": 0,
+      "stats": {},
+      "counters": null
+    },
+    "witch": {
+      "name": "Witch",
+      "icon": "🧹",
+      "price": 60,
+      "stats": {
+        "luck": 1
+      },
+      "counters": "ghost"
+    },
+    "mummy": {
+      "name": "Mummy",
+      "icon": "🩹",
+      "price": 90,
+      "stats": {
+        "courage": 1,
+        "sneak": 1
+      },
+      "counters": "werewolf"
+    },
+    "werewolf": {
+      "name": "Werewolf",
+      "icon": "🐺",
+      "price": 120,
+      "stats": {
+        "sneak": 2
+      },
+      "counters": "vampire"
+    },
+    "vampire": {
+      "name": "Vampire",
+      "icon": "🧛",
+      "price": 150,
+      "stats": {
+        "courage": 2
+      },
+      "counters": "shade"
+    },
+    "hunter": {
+      "name": "Monster Hunter",
+      "icon": "🏹",
+      "price": 180,
+      "stats": {
+        "courage": 1,
+        "sneak": 1
+      },
+      "counters": "witch"
+    },
+    "skeleton": {
+      "name": "Skeleton",
+      "icon": "💀",
+      "price": 220,
+      "stats": {
+        "courage": 1,
+        "luck": 2
+      },
+      "counters": "zombie"
+    },
+    "headless": {
+      "name": "Headless Horseman",
+      "icon": "🐎",
+      "booPrice": 150,
+      "stats": {
+        "courage": 2,
+        "luck": 1
+      },
+      "counters": "werewolf"
+    },
+    "pumpkinking": {
+      "name": "Pumpkin King",
+      "icon": "🤴",
+      "booPrice": 300,
+      "stats": {
+        "luck": 2,
+        "sneak": 1
+      },
+      "counters": "ghost"
+    },
+    "banshee": {
+      "name": "Moonlit Banshee",
+      "icon": "🌙",
+      "raffleOnly": true,
+      "stats": {
+        "luck": 1,
+        "courage": 1
+      },
+      "counters": "shade"
+    }
   },
-
   "cosmeticBurnShare": 0.4,
-
   "boosts": {
-    "lollipop":  { "name": "Lucky Lollipop", "icon": "🍭", "price": 30, "text": "+2 Luck for 10 knocks", "knocks": 10, "luck": 2 },
-    "nightvision": { "name": "Night Vision", "icon": "🥽", "price": 25, "text": "Tells are always honest for 10 knocks", "knocks": 10 },
-    "repellent": { "name": "Monster Repellent", "icon": "🧴", "price": 40, "text": "No monsters for 15 minutes", "minutes": 15 }
+    "lollipop": {
+      "name": "Lucky Lollipop",
+      "icon": "🍭",
+      "price": 30,
+      "text": "+2 Luck for 10 knocks",
+      "knocks": 10,
+      "luck": 2
+    },
+    "nightvision": {
+      "name": "Night Vision",
+      "icon": "🥽",
+      "price": 25,
+      "text": "Tells are always honest for 10 knocks",
+      "knocks": 10
+    },
+    "repellent": {
+      "name": "Monster Repellent",
+      "icon": "🧴",
+      "price": 40,
+      "text": "No monsters for 15 minutes",
+      "minutes": 15
+    }
   },
-
   "upgrades": {
-    "bag":    { "name": "Bigger Bag",   "icon": "🎒", "price": 150, "amount": 60 },
-    "stash":  { "name": "Bigger Stash", "icon": "📦", "price": 200, "amount": 500 },
-    "knocks": { "name": "Coffee Break (+5 knocks)", "icon": "☕", "price": 40, "amount": 5 }
+    "bag": {
+      "name": "Bigger Bag",
+      "icon": "🎒",
+      "price": 150,
+      "amount": 60
+    },
+    "stash": {
+      "name": "Bigger Stash",
+      "icon": "📦",
+      "price": 200,
+      "amount": 500
+    },
+    "knocks": {
+      "name": "Coffee Break (+5 knocks)",
+      "icon": "☕",
+      "price": 40,
+      "amount": 5
+    }
   },
-
-  "raffle": { "ticketPrice": 10, "maxTicketsPerDay": 10, "prizeCostume": "banshee" },
-
+  "raffle": {
+    "_comment": "The Town Raffle draws every 5 minutes. Slots cost candy (max 100 per player per round), plus one free slot a day. 10 winners share prizes funded by transaction fees; cash and stock prizes are held as pending until the winner verifies and an admin pays them out.",
+    "roundMinutes": 5,
+    "slotPrice": 5,
+    "maxSlots": 100,
+    "freeSlotsPerDay": 1,
+    "winners": 10,
+    "minLevel": 1,
+    "realPrizes": true,
+    "minEntrantsForRealPrizes": 3,
+    "prizes": [
+      {
+        "kind": "cash",
+        "usd": 5,
+        "name": "$5 cash"
+      },
+      {
+        "kind": "stock",
+        "usd": 5,
+        "name": "$5 in fractional stock"
+      },
+      {
+        "kind": "cash",
+        "usd": 2,
+        "name": "$2 cash"
+      },
+      {
+        "kind": "cash",
+        "usd": 2,
+        "name": "$2 cash"
+      },
+      {
+        "kind": "stock",
+        "usd": 2,
+        "name": "$2 in fractional stock"
+      },
+      {
+        "kind": "cash",
+        "usd": 1,
+        "name": "$1 cash"
+      },
+      {
+        "kind": "cash",
+        "usd": 1,
+        "name": "$1 cash"
+      },
+      {
+        "kind": "cash",
+        "usd": 1,
+        "name": "$1 cash"
+      },
+      {
+        "kind": "cash",
+        "usd": 1,
+        "name": "$1 cash"
+      },
+      {
+        "kind": "cash",
+        "usd": 1,
+        "name": "$1 cash"
+      }
+    ],
+    "consolationCandy": 25,
+    "auction": {
+      "_comment": "Player raffles: list $BOO, monster cards or card NFTs; others buy candy slots; one random winner. 10% of the candy is burned.",
+      "maxActive": 3,
+      "maxSlots": 100,
+      "durationsMinutes": [
+        5,
+        15,
+        30,
+        60
+      ],
+      "candyFee": 0.1,
+      "minSlotPrice": 1,
+      "maxSlotPrice": 500
+    },
+    "prizeCostume": "banshee"
+  },
   "cards": {
     "_comment": "Original monster cards (our own IP). Epic and Legendary cards can be minted on-chain.",
-    "rarityWeights": { "common": 60, "rare": 28, "epic": 10, "legendary": 2 },
+    "rarityWeights": {
+      "common": 60,
+      "rare": 28,
+      "epic": 10,
+      "legendary": 2
+    },
     "craftCost": 40,
     "craftDuplicates": 3,
     "list": [
-      { "id": "c01", "name": "Porch Goblin",        "rarity": "common" },
-      { "id": "c02", "name": "Sheet Ghost",         "rarity": "common" },
-      { "id": "c03", "name": "Candy Corn Imp",      "rarity": "common" },
-      { "id": "c04", "name": "Toilet Paper Mummy",  "rarity": "common" },
-      { "id": "c05", "name": "Lawn Gnome Zombie",   "rarity": "rare" },
-      { "id": "c06", "name": "Doorbell Banshee",    "rarity": "rare" },
-      { "id": "c07", "name": "Raccoon Bandit",      "rarity": "rare" },
-      { "id": "c08", "name": "Count Nibble",        "rarity": "epic" },
-      { "id": "c09", "name": "Granny Hex",          "rarity": "epic" },
-      { "id": "c10", "name": "The Lurker",          "rarity": "epic" },
-      { "id": "c11", "name": "The Headless Mailman","rarity": "legendary" },
-      { "id": "c12", "name": "The Pumpkin King",    "rarity": "legendary" }
+      {
+        "id": "c01",
+        "name": "Porch Goblin",
+        "rarity": "common"
+      },
+      {
+        "id": "c02",
+        "name": "Sheet Ghost",
+        "rarity": "common"
+      },
+      {
+        "id": "c03",
+        "name": "Candy Corn Imp",
+        "rarity": "common"
+      },
+      {
+        "id": "c04",
+        "name": "Toilet Paper Mummy",
+        "rarity": "common"
+      },
+      {
+        "id": "c05",
+        "name": "Lawn Gnome Zombie",
+        "rarity": "rare"
+      },
+      {
+        "id": "c06",
+        "name": "Doorbell Banshee",
+        "rarity": "rare"
+      },
+      {
+        "id": "c07",
+        "name": "Raccoon Bandit",
+        "rarity": "rare"
+      },
+      {
+        "id": "c08",
+        "name": "Count Nibble",
+        "rarity": "epic"
+      },
+      {
+        "id": "c09",
+        "name": "Granny Hex",
+        "rarity": "epic"
+      },
+      {
+        "id": "c10",
+        "name": "The Lurker",
+        "rarity": "epic"
+      },
+      {
+        "id": "c11",
+        "name": "The Headless Mailman",
+        "rarity": "legendary"
+      },
+      {
+        "id": "c12",
+        "name": "The Pumpkin King",
+        "rarity": "legendary"
+      }
     ]
   },
-
   "prizes": {
-    "_comment": "Real-world rewards are earned by skill or milestones, never by a random roll. No purchase necessary.",
+    "_comment": "Milestone prizes: earned by skill or milestones. Town Raffle prizes live in the raffle block.",
     "list": [
-      { "id": "deck-print", "name": "Printed Knock monster card deck", "requirement": { "kind": "fullDeck" } },
-      { "id": "legend-hunter", "name": "Signed Legendary art print", "requirement": { "kind": "legendaryCount", "count": 5 } },
-      { "id": "season-champ", "name": "Season champion merch box", "requirement": { "kind": "leaderboardRank", "board": "candy", "rank": 3 } }
+      {
+        "id": "deck-print",
+        "name": "Printed Knock monster card deck",
+        "requirement": {
+          "kind": "fullDeck"
+        }
+      },
+      {
+        "id": "legend-hunter",
+        "name": "Signed Legendary art print",
+        "requirement": {
+          "kind": "legendaryCount",
+          "count": 5
+        }
+      },
+      {
+        "id": "season-champ",
+        "name": "Season champion merch box",
+        "requirement": {
+          "kind": "leaderboardRank",
+          "board": "candy",
+          "rank": 3
+        }
+      }
     ]
   },
-
   "token": {
     "symbol": "BOO",
     "name": "Boo",
     "totalSupply": 1000000000,
-    "allocation": { "vault:rewards": 0.30, "treasury": 0.20, "team": 0.15, "community": 0.15, "liquidity": 0.10, "early": 0.10 },
+    "allocation": {
+      "vault:rewards": 0.3,
+      "treasury": 0.2,
+      "team": 0.15,
+      "community": 0.15,
+      "liquidity": 0.1,
+      "early": 0.1
+    },
     "devnetFaucet": 500,
     "epoch": {
       "_comment": "Each day's revenue funds the next payouts. Bootstrap top-up declines 10% per epoch.",
@@ -293,55 +995,226 @@
       "vaultRefillShare": 0.2,
       "bootstrap": 500,
       "bootstrapDecay": 0.9
-    }
+    },
+    "devnetSolFaucet": 2
   },
-
   "missions": [
-    { "id": "knock10", "text": "Knock on 10 doors",             "stat": "knocks",      "goal": 10, "reward": { "candy": 25, "knocks": 2 } },
-    { "id": "knock20", "text": "Knock on 20 doors",             "stat": "knocks",      "goal": 20, "reward": { "candy": 40, "knocks": 3 } },
-    { "id": "scare1",  "text": "Survive a scare",               "stat": "scaresWon",   "goal": 1,  "reward": { "candy": 20, "knocks": 2 } },
-    { "id": "bank50",  "text": "Bank 50 candy at home",         "stat": "banked",      "goal": 50, "reward": { "candy": 20, "knocks": 2 } },
-    { "id": "types3",  "text": "Visit 3 different house types", "stat": "typesVisited","goal": 3,  "reward": { "candy": 25, "knocks": 2 } },
-    { "id": "ambush1", "text": "Fend off a monster",            "stat": "ambushesWon", "goal": 1,  "reward": { "candy": 30, "knocks": 2 } },
-    { "id": "hot1",    "text": "Visit today's Hot House",       "stat": "hotVisits",   "goal": 1,  "reward": { "candy": 15, "knocks": 2 } },
-    { "id": "earn60",  "text": "Collect 60 candy",              "stat": "earned",      "goal": 60, "reward": { "candy": 20, "knocks": 2 } },
-    { "id": "route",   "text": "Finish today's route",          "stat": "routeDone",   "goal": 1,  "reward": { "candy": 40, "knocks": 3 } }
+    {
+      "id": "knock10",
+      "text": "Knock on 10 doors",
+      "stat": "knocks",
+      "goal": 10,
+      "reward": {
+        "candy": 25,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "knock20",
+      "text": "Knock on 20 doors",
+      "stat": "knocks",
+      "goal": 20,
+      "reward": {
+        "candy": 40,
+        "knocks": 3
+      }
+    },
+    {
+      "id": "scare1",
+      "text": "Survive a scare",
+      "stat": "scaresWon",
+      "goal": 1,
+      "reward": {
+        "candy": 20,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "bank50",
+      "text": "Bank 50 candy at home",
+      "stat": "banked",
+      "goal": 50,
+      "reward": {
+        "candy": 20,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "types3",
+      "text": "Visit 3 different house types",
+      "stat": "typesVisited",
+      "goal": 3,
+      "reward": {
+        "candy": 25,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "ambush1",
+      "text": "Fend off a monster",
+      "stat": "ambushesWon",
+      "goal": 1,
+      "reward": {
+        "candy": 30,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "hot1",
+      "text": "Visit today's Hot House",
+      "stat": "hotVisits",
+      "goal": 1,
+      "reward": {
+        "candy": 15,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "earn60",
+      "text": "Collect 60 candy",
+      "stat": "earned",
+      "goal": 60,
+      "reward": {
+        "candy": 20,
+        "knocks": 2
+      }
+    },
+    {
+      "id": "route",
+      "text": "Finish today's route",
+      "stat": "routeDone",
+      "goal": 1,
+      "reward": {
+        "candy": 40,
+        "knocks": 3
+      }
+    }
   ],
   "npcs": {
     "_comment": "Mission givers. Each offers one mission a day from its pool. Talk to accept, come back to claim. Rewards scale with the neighborhood's candy multiplier.",
-    "mayor":  { "name": "Mayor Gourd", "title": "Mayor of the town square", "hood": null, "look": "mayor",
-                "pool": ["knock10", "earn60", "hot1", "route"],
-                "hello": "Ah, a fresh face! This town runs on candy and courage. Help me out?" },
-    "hollow": { "name": "Old Mrs. Hollow", "title": "Knows every door on Hollow Lane", "hood": "hollow-lane", "look": "granny",
-                "pool": ["types3", "bank50", "scare1", "knock20"],
-                "hello": "Back in my day we knocked uphill both ways. Here's a little errand, dearie." },
-    "crypt":  { "name": "Gravedigger Mort", "title": "Keeps Crypt Row tidy", "hood": "crypt-row", "look": "digger",
-                "pool": ["ambush1", "knock20", "earn60"],
-                "hello": "Monsters keep digging up my nice graves. Teach 'em a lesson." },
-    "witch":  { "name": "Hazel", "title": "The Witch of Witchwood", "hood": "witchwood", "look": "witch",
-                "pool": ["scare1", "ambush1", "types3"],
-                "hello": "Hee hee! Brave little thing. I've a task, if your nerves can take it." }
+    "mayor": {
+      "name": "Mayor Gourd",
+      "title": "Mayor of the town square",
+      "hood": null,
+      "look": "mayor",
+      "pool": [
+        "knock10",
+        "earn60",
+        "hot1",
+        "route"
+      ],
+      "hello": "Ah, a fresh face! This town runs on candy and courage. Help me out?"
+    },
+    "hollow": {
+      "name": "Old Mrs. Hollow",
+      "title": "Knows every door on Hollow Lane",
+      "hood": "hollow-lane",
+      "look": "granny",
+      "pool": [
+        "types3",
+        "bank50",
+        "scare1",
+        "knock20"
+      ],
+      "hello": "Back in my day we knocked uphill both ways. Here's a little errand, dearie."
+    },
+    "crypt": {
+      "name": "Gravedigger Mort",
+      "title": "Keeps Crypt Row tidy",
+      "hood": "crypt-row",
+      "look": "digger",
+      "pool": [
+        "ambush1",
+        "knock20",
+        "earn60"
+      ],
+      "hello": "Monsters keep digging up my nice graves. Teach 'em a lesson."
+    },
+    "witch": {
+      "name": "Hazel",
+      "title": "The Witch of Witchwood",
+      "hood": "witchwood",
+      "look": "witch",
+      "pool": [
+        "scare1",
+        "ambush1",
+        "types3"
+      ],
+      "hello": "Hee hee! Brave little thing. I've a task, if your nerves can take it."
+    }
   },
   "npcRadius": 3.5,
-
-  "comfort": { "lossesInLast": 10, "lossThreshold": 4 },
-
-  "trophies": ["Haunted Music Box", "Crystal Skull", "Cursed Locket", "Silver Raven", "Ancient Grimoire"],
+  "comfort": {
+    "lossesInLast": 10,
+    "lossThreshold": 4
+  },
+  "trophies": [
+    "Haunted Music Box",
+    "Crystal Skull",
+    "Cursed Locket",
+    "Silver Raven",
+    "Ancient Grimoire"
+  ],
   "jackpotTrophy": "Golden Pumpkin",
-
   "flavor": {
-    "candy": ["A kind grandma hands you a fistful of candy.", "Full-size bars! Well, almost.", "They drop candy in your bag with a smile."],
-    "bigCandy": ["A whole bowl tips into your bag!", "\"Take as many as you want.\" You take a LOT."],
-    "rare": ["Homemade caramel apples! Rare candy!", "A golden wrapper glints. Rare candy!", "The good chocolate. RARE."],
-    "collectible": ["A monster card is taped to the door!", "They hand you a shiny monster card."],
-    "token": ["A coin with a ghost on it clinks into your bag: $BOO!", "Someone slips you a glowing token. $BOO!"],
-    "legendary": ["The door creaks open on a treasure room. LEGENDARY!", "A cloaked figure presses something ancient into your hands. LEGENDARY!"],
-    "jackpot": ["THE GOLDEN PUMPKIN! JACKPOT! The whole street heard that."],
-    "secretHouse": ["Behind the hedge, a path you've never seen. A SECRET HOUSE!"],
-    "trick": ["A dog chases you off the porch. You drop some candy.", "A sprinkler soaks your costume. A few pieces wash away.",
-              "Your hat falls off and a squirrel steals a candy.", "Toilet paper ambush! You trip and spill candy.",
-              "They hand you a toothbrush. Then a raccoon raids your bag."],
-    "scare": ["Something is behind the door..."],
-    "ambush": ["You're not alone on this porch."]
+    "candy": [
+      "A kind grandma hands you a fistful of candy.",
+      "Full-size bars! Well, almost.",
+      "They drop candy in your bag with a smile."
+    ],
+    "bigCandy": [
+      "A whole bowl tips into your bag!",
+      "\"Take as many as you want.\" You take a LOT."
+    ],
+    "rare": [
+      "Homemade caramel apples! Rare candy!",
+      "A golden wrapper glints. Rare candy!",
+      "The good chocolate. RARE."
+    ],
+    "collectible": [
+      "A monster card is taped to the door!",
+      "They hand you a shiny monster card."
+    ],
+    "token": [
+      "A coin with a ghost on it clinks into your bag: $BOO!",
+      "Someone slips you a glowing token. $BOO!"
+    ],
+    "legendary": [
+      "The door creaks open on a treasure room. LEGENDARY!",
+      "A cloaked figure presses something ancient into your hands. LEGENDARY!"
+    ],
+    "jackpot": [
+      "THE GOLDEN PUMPKIN! JACKPOT! The whole street heard that."
+    ],
+    "secretHouse": [
+      "Behind the hedge, a path you've never seen. A SECRET HOUSE!"
+    ],
+    "trick": [
+      "A dog chases you off the porch. You drop some candy.",
+      "A sprinkler soaks your costume. A few pieces wash away.",
+      "Your hat falls off and a squirrel steals a candy.",
+      "Toilet paper ambush! You trip and spill candy.",
+      "They hand you a toothbrush. Then a raccoon raids your bag."
+    ],
+    "scare": [
+      "Something is behind the door..."
+    ],
+    "ambush": [
+      "You're not alone on this porch."
+    ]
+  },
+  "fees": {
+    "_comment": "Every $BOO or SOL payment carries a fee. The fee is split: house owners share 2%, the raffle prize pool gets 40%, $BOO fees burn 30%, the rest goes to the treasury.",
+    "rate": 0.05,
+    "split": {
+      "houseOwners": 0.02,
+      "prizePool": 0.4,
+      "burn": 0.3
+    },
+    "usdRate": {
+      "_comment": "Devnet placeholder prices used to value the prize pool.",
+      "SOL": 150,
+      "BOO": 0.01
+    }
   }
 }

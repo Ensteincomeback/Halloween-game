@@ -1,7 +1,8 @@
 // Houses: neighborhoods, daily moods and tells, reputation, deeds (NFTs),
 // the owner's Behavior Dial, owner revenue, and the daily payout epoch.
 
-import { GameError, hashInt, seeded, dayKey, clamp, DAY } from './core.js';
+import { GameError, hashInt, seeded, dayKey, clamp, DAY, MINUTE } from './core.js';
+import { toLamports, toSol } from './chain.js';
 
 export const REWARD_OUTCOMES = new Set(['candy', 'bigCandy', 'rare', 'collectible', 'token', 'legendary', 'secretHouse']);
 
@@ -20,6 +21,7 @@ export function installHouses(ctx) {
       h.neighborhood = hood.id; // a new season may rename or reskin; ids stay
       h.plot = (hood.plots || []).includes(i); // empty NFT lot vs. NPC home
       h.name = hood.names[i % hood.names.length];
+      if (h.lastPrice && h.lastPrice < 1e6) delete h.lastPrice; // pre-SOL saves stored $BOO prices
     });
   }
   for (const s of season.secretHouses) {
@@ -85,7 +87,30 @@ export function installHouses(ctx) {
     return [...ids].sort((a, b) => score(a) - score(b)).slice(0, H.routeLength).sort((a, b) => a - b);
   };
 
-  ctx.legendaryEventOpen = () => !!state.global.devEvent || new Date(now()).getUTCHours() === season.legendaryEvent.hourUtc;
+  // ---------- Legendary Mansion: random appearances ----------
+  // It opens for a few minutes, then reappears 20-40 minutes after it last
+  // opened, at a time picked by the server's RNG. The next opening is never
+  // sent to clients, so a bot can't just park at the door and wait.
+  const LE = season.legendaryEvent;
+  const gapMs = () => (LE.minGapMinutes + ctx.rng() * (LE.maxGapMinutes - LE.minGapMinutes)) * MINUTE;
+  ctx.legendarySchedule = () => (state.global.legendary ??= { nextAt: now() + gapMs(), openUntil: 0, openedAt: 0, count: 0 });
+  ctx.legendaryEventOpen = () => !!state.global.devEvent || now() < ctx.legendarySchedule().openUntil;
+  ctx.legendaryClosesAt = () => (state.global.devEvent ? null : ctx.legendarySchedule().openUntil);
+
+  function tickLegendary() {
+    const L = ctx.legendarySchedule();
+    const t = now();
+    if (t < L.nextAt) return;
+    // A server that was down through a whole window just reschedules.
+    if (t < L.nextAt + LE.openMinutes * MINUTE) {
+      L.openedAt = t;
+      L.openUntil = t + LE.openMinutes * MINUTE;
+      L.count += 1;
+      const lh = state.houses[LE.houseId];
+      ctx.pushFeed('event', `The ${lh.name} has appeared! Open to everyone for ${LE.openMinutes} minutes. Entry: ${LE.entryFee} candy.`, { houseId: lh.id });
+    }
+    L.nextAt = t + gapMs();
+  }
 
   // ---------- reputation ----------
   // 0-100: payout rate vs. expected for the type, trust weighted, time decayed
@@ -149,6 +174,13 @@ export function installHouses(ctx) {
     v.events.push({ at: t, good: good ? 1 : 0, w: p.trust / 100, jackpot: detail.jackpot ? 1 : 0 });
     v.events = v.events.slice(-20);
     epochVisit(h, p);
+    // Passive candy: each trusted visitor tops up the owner's till once a day.
+    if (owner && p.trust >= season.trust.lowTrust && h.visitDay?.[p.id] !== ctx.today()) {
+      if (h.visitDay?.day !== ctx.today()) h.visitDay = { day: ctx.today() };
+      h.visitDay[p.id] = ctx.today();
+      h.till += H.visitCandy;
+      ctx.track('in', 'houseVisits', H.visitCandy);
+    }
   };
 
   // ---------- Behavior Dial (24h timelock, publicly logged) ----------
@@ -183,14 +215,14 @@ export function installHouses(ctx) {
   ctx.buyDeed = (p, houseId) => {
     const h = ctx.house(houseId);
     const ht = season.houseTypes[h.type];
-    if (!h.plot || !ht.price) throw new GameError('Somebody lives here. Only empty houses are for sale.');
+    if (!h.plot || !ht.solPrice) throw new GameError('Somebody lives here. Only empty houses are for sale.');
     if (h.deed) throw new GameError('Already owned. Check the market.');
     if (housesOwnedBy(p).length >= H.maxPerWallet) throw new GameError(`Max ${H.maxPerWallet} houses per wallet`);
-    chain.transfer(p.wallet, 'treasury', ht.price, `deed #${h.id}`);
-    ctx.revenue(ht.price);
+    // Deeds are paid in SOL.
+    ctx.payGame(p, 'SOL', toLamports(ht.solPrice), `deed #${h.id}`);
     const nft = chain.mintNft('house', p.wallet, { houseId: h.id, name: h.name, type: h.type });
     h.deed = nft.id;
-    h.lastPrice = ht.price;
+    h.lastPrice = toLamports(ht.solPrice);
     ctx.pushFeed('deed', `${p.name} bought the deed to #${h.id} ${h.name}.`, { houseId: h.id });
   };
 
@@ -200,8 +232,7 @@ export function installHouses(ctx) {
     const L = H.lantern;
     if (h.lantern >= L.maxLevel) throw new GameError('Lantern is already max level');
     const price = L.prices[h.lantern];
-    const { paid } = chain.payWithBurn(p.wallet, 'treasury', price, L.burnShare, `lantern #${h.id}`);
-    ctx.revenue(paid);
+    ctx.payGame(p, 'BOO', price, `lantern #${h.id}`, L.burnShare);
     h.lantern += 1;
   };
 
@@ -230,8 +261,10 @@ export function installHouses(ctx) {
   ctx.listHouse = (p, houseId, price) => {
     const h = ctx.house(houseId);
     requireOwner(p, h);
-    chain.list(h.deed, p.wallet, Math.round(Number(price)));
-    ctx.pushFeed('market', `#${h.id} ${h.name} is for sale for ${price} $${season.token.symbol}.`, { houseId: h.id });
+    const sol = Number(price);
+    if (!(sol > 0)) throw new GameError('Set a price in SOL');
+    chain.list(h.deed, p.wallet, toLamports(sol), 'SOL');
+    ctx.pushFeed('market', `#${h.id} ${h.name} is for sale for ${toSol(toLamports(sol))} SOL.`, { houseId: h.id });
   };
 
   ctx.cancelListing = (p, houseId) => chain.cancel(ctx.house(houseId).deed, p.wallet);
@@ -240,14 +273,15 @@ export function installHouses(ctx) {
     const h = ctx.house(houseId);
     if (!h.deed || !chain.state.listings[h.deed]) throw new GameError('Not for sale');
     if (housesOwnedBy(p).length >= H.maxPerWallet) throw new GameError(`Max ${H.maxPerWallet} houses per wallet`);
-    const { price, fee } = chain.buy(h.deed, p.wallet, { fee: H.marketFee, feeBurnShare: H.marketFeeBurnShare });
-    ctx.revenue(fee - Math.floor(fee * H.marketFeeBurnShare));
-    h.lastPrice = price;
-    h.log.unshift({ at: now(), player: p.name, outcome: 'sold', detail: { price } });
-    ctx.pushFeed('market', `${p.name} bought #${h.id} ${h.name} for ${price} $${season.token.symbol}.`, { houseId: h.id });
+    const { price, fee, currency } = chain.buy(h.deed, p.wallet, { fee: H.marketFee, feeTo: 'fees:incoming' });
+    if (fee > 0) ctx.routeFee(currency, 'fees:incoming', fee, `market #${h.id}`);
+    h.lastPrice = currency === 'SOL' ? price : h.lastPrice;
+    h.log.unshift({ at: now(), player: p.name, outcome: 'sold', detail: { price: toSol(price), currency } });
+    ctx.pushFeed('market', `${p.name} bought #${h.id} ${h.name} for ${toSol(price)} SOL.`, { houseId: h.id });
   };
 
-  ctx.houseValue = (h) => h.lastPrice || Math.round((season.houseTypes[h.type].price || 0) * (0.5 + ctx.reputation(h) / 100));
+  // Estimated value in SOL: last sale, or list price scaled by reputation.
+  ctx.houseValue = (h) => toSol(h.lastPrice || Math.round(toLamports(season.houseTypes[h.type].solPrice || 0) * (0.5 + ctx.reputation(h) / 100)));
 
   // ---------- epoch: real revenue funds owner and monster payouts ----------
   state.epoch ??= { day: null, index: 0, revenue: 0, houses: {}, monsters: {} };
@@ -289,6 +323,7 @@ export function installHouses(ctx) {
       const w = Math.sqrt(Object.values(visitors).reduce((a, b) => a + b, 0)) * (1 + H.lantern.poolWeightPerLevel * h.lantern);
       return { owner: ctx.houseOwner(h), w, h };
     }).filter((x) => x.owner);
+    const ownerShare = ctx.payOwnerFeeShare();
     distribute(hauntPool, houseWeights, (x, amt) => {
       x.owner.claimable += amt;
       ctx.notify(x.owner, `#${x.h.id} ${x.h.name} earned ${amt} $${season.token.symbol} from yesterday's visitors.`);
@@ -306,7 +341,7 @@ export function installHouses(ctx) {
     const stats = Object.values(state.houses).map((h) => [h.id, h.totals, ctx.reputation(h)]);
     chain.anchor('reputation', hashStats(stats), { epoch: E.index, day: E.day });
     Object.assign(E, { index: E.index + 1, revenue: 0, houses: {}, monsters: {} });
-    return { hauntPool, monsterPool, bootstrap };
+    return { hauntPool, monsterPool, bootstrap, ownerShare };
   };
 
   function distribute(pool, weights, give) {
@@ -327,21 +362,14 @@ export function installHouses(ctx) {
     const d = ctx.today();
     const g = state.global;
     if (g.day !== d) {
-      if (g.day) {
-        ctx.settleEpoch();
-        ctx.drawRaffle?.(g.day);
-      }
+      if (g.day) ctx.settleEpoch();
       g.day = d;
       g.jackpotsToday = 0;
       state.epoch.day = d;
     }
     for (const h of Object.values(state.houses)) ctx.applyDial(h);
-    const hourKey = `${d}:${new Date(now()).getUTCHours()}`;
-    if (ctx.legendaryEventOpen() && g.legendaryAnnounced !== hourKey) {
-      g.legendaryAnnounced = hourKey;
-      const lh = state.houses[season.legendaryEvent.houseId];
-      ctx.pushFeed('event', `The ${lh.name} has appeared! Open to everyone for one hour. Entry: ${season.legendaryEvent.entryFee} candy.`, { houseId: lh.id });
-    }
+    tickLegendary();
+    ctx.tickRaffles?.();
   };
 
   // ---------- views ----------
@@ -365,8 +393,8 @@ export function installHouses(ctx) {
       legendariesToday: todays.filter((e) => e.outcome === 'legendary').length,
       owner: owner ? { name: owner.name, isYou: owner.id === p?.id } : null,
       plot: !!h.plot, forSale: !!h.plot && !h.deed, knockable: ctx.knockable(h),
-      price: h.plot && !h.deed ? ht.price : null,
-      listing: listing ? { price: listing.price } : null,
+      price: h.plot && !h.deed ? ht.solPrice : null,
+      listing: listing ? { price: toSol(listing.price), currency: listing.currency || 'BOO' } : null,
       value: ctx.houseValue(h),
       dial: h.dial, dialName: H.dial[h.dial].name,
       pendingDial: h.pendingDial && { mode: h.pendingDial.mode, name: H.dial[h.pendingDial.mode].name, at: h.pendingDial.at },

@@ -47,6 +47,7 @@ export function createDevPanel({ api, S, toast, teleport, refresh, startTutorial
         <button class="btn small" data-dev="candy" data-args="[1000000]">+1M candy</button>
         <button class="btn small" data-dev="fillBucket">Fill bucket</button>
         <button class="btn small" data-dev="boo" data-args="[5000]">+5k $BOO</button>
+        <button class="btn small" data-dev="sol" data-args="[10]">+10 SOL</button>
         <button class="btn small" data-dev="knocks">999 knocks</button>
       </div>
       <div class="dev-row"><label>Level <select id="dev-level">${[1, 3, 4, 5, 8, 10, 15, 20, 30].map((l) => `<option ${l === p.level ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -74,8 +75,15 @@ export function createDevPanel({ api, S, toast, teleport, refresh, startTutorial
       <div class="dev-row">
         <button class="btn small" data-dev="event" data-args="[true]">Open Legendary Mansion</button>
         <button class="btn small" data-dev="event" data-args="[false]">Close it</button>
+        <button class="btn small" data-dev="eventSoon">Random event fires in 3s</button>
         <button class="btn small" data-dev="epoch">Settle payouts now</button>
         <button class="btn small" data-dev="resetDaily">New day</button>
+      </div>
+      <h4>Raffles</h4>
+      <div class="dev-row">
+        <button class="btn small" data-dev="fundPrizes" data-args="[50]">+$50 prize pool</button>
+        <button class="btn small" data-dev="drawRaffle">Draw Town Raffle now (+3 bots)</button>
+        <button class="btn small" data-dev="endAuctions">End player raffles now</button>
       </div>
       <h4>Travel</h4>
       <div class="dev-row"><select id="dev-spot">${spots().map(([name], i) => `<option value="${i}">${name}</option>`).join('')}</select>

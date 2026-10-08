@@ -55,28 +55,32 @@
         <div class="stat" title="Danger rises the longer you stay out. A bank trip resets it."><span class="lbl">Night</span><span id="hud-night" class="val"></span><div class="bar night"><div id="hud-night-bar"></div></div></div>
         <div class="stat" title="Daily streak"><span class="lbl">Streak</span><span id="hud-streak" class="val"></span></div>
         <div class="stat" id="hud-boo-wrap" hidden title="Your $BOO balance"><span class="lbl">$BOO</span><span id="hud-boo" class="val"></span></div>
+        <div class="stat" id="hud-sol-wrap" hidden title="Your SOL balance (houses are bought with SOL)"><span class="lbl">SOL</span><span id="hud-sol" class="val"></span></div>
       </div>
       <div class="hud-right">
         <button id="btn-dev" class="btn dev-btn" hidden>DEV</button>
+        <button id="btn-bag" class="btn" title="Inventory (I)">🎒</button>
         <button id="btn-help-hud" class="btn" title="How to play (H)">❔</button>
         <button id="btn-settings" class="btn" title="Settings (Esc)">⚙</button>
         <button id="btn-menu" class="btn">☰ Menu <kbd>Tab</kbd></button>
       </div>
     </header>
 
-    <div id="banners"></div>
+    <div id="notes" aria-live="polite"></div>
+    <button id="raffle-widget" title="Town Raffle: draws every 5 minutes. Click for slots and prizes."></button>
     <canvas id="minimap" width="160" height="160" title="Map: pink = Candy Bank, yellow = for sale / gatekeeper, orange = Hot House, white = today's route"></canvas>
     <div id="tutorial" hidden></div>
     <div id="prompt" hidden></div>
     <button id="btn-action" class="btn primary" hidden>Knock</button>
     <div id="joystick" hidden><div id="joystick-knob"></div></div>
-    <div id="controls-hint">WASD move · Shift run · E knock / talk / shop · Tab menu · H help · Esc settings</div>
+    <div id="controls-hint">WASD move · Shift run · E knock / talk / shop · Tab menu · I bag · H help · Esc settings</div>
     <div id="devpanel" hidden></div>
 
     <aside id="drawer" class="side">
       <nav class="tabs" role="tablist">
         <button data-tab="porch" class="active">House</button>
         <button data-tab="missions">Missions</button>
+        <button data-tab="bag">Bag</button>
         <button data-tab="shop">Shop</button>
         <button data-tab="board">Board</button>
         <button data-tab="leaders">Leaders</button>
@@ -87,6 +91,7 @@
       </nav>
       <div id="tab-porch" class="tab active"></div>
       <div id="tab-missions" class="tab"></div>
+      <div id="tab-bag" class="tab"></div>
       <div id="tab-shop" class="tab"></div>
       <div id="tab-board" class="tab"></div>
       <div id="tab-leaders" class="tab"></div>

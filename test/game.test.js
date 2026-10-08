@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createGame, buildOdds, rollOutcome, OUTCOMES } from '../server/game.js';
 import { loadSeason, deepMerge } from '../server/config.js';
 import { buildLayout } from '../server/layout.js';
+import { toLamports, toSol } from '../server/chain.js';
 
 const SEASON_FILE = new URL('../season/halloween-2026.json', import.meta.url).pathname;
 const season = loadSeason(SEASON_FILE);
@@ -52,6 +53,9 @@ function knock(env, token, houseId, { scare = 'win', counter } = {}) {
   }
   return res;
 }
+
+// Houses are bought with SOL: grant devnet SOL from the faucet account.
+const giveSol = (env, p, sol) => env.ctx.chain.solTransfer('faucet', p.wallet, toLamports(sol), 'test');
 
 const veteran = (p) => {
   p.xp = 2000; // level 15
@@ -244,7 +248,7 @@ test('player monster lair ambush: success steals from bag, taxes the house owner
   env.game.becomeMonster(m.token, 'vampire');
   const owner = env.login('Owner');
   veteran(owner.p);
-  env.ctx.chain.transfer('liquidity', owner.p.wallet, 1000, 'test');
+  giveSol(env, owner.p, 5);
   env.game.buyDeed(owner.token, 4);
   const v = env.login('Victim');
   veteran(v.p);
@@ -269,7 +273,7 @@ test('player monster lair ambush: success steals from bag, taxes the house owner
         if (!r.won) {
           const take = -r.candy;
           assert.equal(take, Math.ceil(100 * season.monster.types.vampire.stealShare));
-          assert.equal(env.ctx.state.houses[4].till, Math.floor(take * season.monster.houseTax));
+          assert.equal(env.ctx.state.houses[4].till, Math.floor(take * season.monster.houseTax) + season.houses.visitCandy);
           assert.ok(m.p.monster.rep > 50);
           assert.ok(v.p.inbox[0].text.includes('Wraith'), 'revenge notification');
           stole = true;
@@ -339,7 +343,7 @@ test('house deeds are NFTs: buy, per-wallet cap, entry fees split to owner and b
   const env = setup();
   const o = env.login('Owner');
   veteran(o.p);
-  env.ctx.chain.transfer('liquidity', o.p.wallet, 10000, 'test');
+  giveSol(env, o.p, 10);
   const vampireId = Number(Object.values(env.ctx.state.houses).find((h) => h.type === 'vampire' && h.plot).id);
   o.p.unlocked.push('crypt-row');
   env.game.buyDeed(o.token, vampireId);
@@ -356,7 +360,7 @@ test('house deeds are NFTs: buy, per-wallet cap, entry fees split to owner and b
   v.p.stash = 100;
   env.clock.advance(1000);
   const r = env.game.knock(v.token, vampireId, { holdMs: 100 });
-  assert.equal(h.till, Math.floor(season.houseTypes.vampire.entryFee * season.houses.entryFeeOwnerShare));
+  assert.equal(h.till, Math.floor(season.houseTypes.vampire.entryFee * season.houses.entryFeeOwnerShare) + season.houses.visitCandy);
   assert.ok(r.player.stash < 100);
 });
 
@@ -364,7 +368,7 @@ test('behavior dial changes are timelocked and logged publicly', () => {
   const env = setup();
   const o = env.login('Owner');
   veteran(o.p);
-  env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
+  giveSol(env, o.p, 5);
   env.game.buyDeed(o.token, 4);
   env.game.setDial(o.token, 4, 'haunted');
   const h = env.ctx.state.houses[4];
@@ -377,26 +381,67 @@ test('behavior dial changes are timelocked and logged publicly', () => {
   assert.throws(() => env.game.setDial(stranger.token, 4, 'generous'), /do not own/);
 });
 
-test('marketplace: escrowed sale pays seller minus fee, fee is part-burned', () => {
+test('houses cost SOL: deed sale and SOL market, fee split to owners, prize pool and treasury', () => {
   const env = setup();
   const s = env.login('Seller');
   const b = env.login('Buyer');
-  env.ctx.chain.transfer('liquidity', s.p.wallet, 1000, 'test');
-  env.ctx.chain.transfer('liquidity', b.p.wallet, 2000, 'test');
+  // $BOO can't buy a house.
+  env.ctx.chain.transfer('liquidity', s.p.wallet, 100000, 'test');
+  assert.throws(() => env.game.buyDeed(s.token, 4), /Not enough SOL/);
+  giveSol(env, s.p, 5);
+  giveSol(env, b.p, 5);
+  const price = toLamports(season.houseTypes[env.ctx.state.houses[4].type].solPrice);
+  const solBefore = env.ctx.chain.solBal(s.p.wallet);
   env.game.buyDeed(s.token, 4);
-  env.game.listHouse(s.token, 4, 1000);
-  const burned = env.ctx.chain.state.supply.burned;
-  const sellerBefore = env.ctx.chain.bal(s.p.wallet);
+  assert.equal(env.ctx.chain.solBal(s.p.wallet), solBefore - price);
+  const pricePaidFee = Math.floor(price * season.fees.rate);
+  assert.equal(env.ctx.state.fees.totals.SOL.collected, pricePaidFee);
+
+  env.game.listHouse(s.token, 4, 1);
+  assert.equal(env.game.market()[0].currency, 'SOL');
+  const sellerBefore = env.ctx.chain.solBal(s.p.wallet);
+  const pools = () => [env.ctx.chain.solBal('pool:owners'), env.ctx.chain.solBal('pool:prizes')];
+  const [ownersBefore, prizesBefore] = pools();
   env.game.buyListing(b.token, 4);
-  assert.equal(env.ctx.chain.bal(s.p.wallet), sellerBefore + 950);
-  assert.equal(env.ctx.chain.state.supply.burned, burned + 25);
+  const fee = Math.floor(toLamports(1) * season.houses.marketFee);
+  assert.equal(env.ctx.chain.solBal(s.p.wallet), sellerBefore + toLamports(1) - fee);
+  const [ownersAfter, prizesAfter] = pools();
+  assert.equal(ownersAfter - ownersBefore, Math.floor(fee * season.fees.split.houseOwners));
+  assert.equal(prizesAfter - prizesBefore, Math.floor(fee * season.fees.split.prizePool));
   assert.equal(env.ctx.houseOwner(env.ctx.state.houses[4]).id, b.p.id);
+});
+
+test('house owners passively get their fee share and candy from new visitors each day', () => {
+  const env = setup();
+  const o = env.login('Owner');
+  giveSol(env, o.p, 5);
+  env.game.buyDeed(o.token, 4);
+  const h = env.ctx.state.houses[4];
+  const v = env.login('Visitor');
+  veteran(v.p);
+  knock(env, v.token, 4);
+  knock(env, v.token, 4);
+  assert.equal(h.till, season.houses.visitCandy, 'once per visitor per day');
+  knock(env, env.login('V2').token, 4);
+  assert.equal(h.till, 2 * season.houses.visitCandy);
+  // A $BOO purchase anywhere in the game feeds the owners' pool.
+  const buyer = env.login('Shopper');
+  env.ctx.chain.transfer('liquidity', buyer.p.wallet, 100000, 'test');
+  env.ctx.payGame(buyer.p, 'BOO', 20000, 'test purchase');
+  const pool = env.ctx.chain.bal('pool:owners');
+  assert.ok(pool > 0);
+  const before = env.ctx.chain.bal(o.p.wallet);
+  const solBefore = env.ctx.chain.solBal(o.p.wallet);
+  const r = env.ctx.settleEpoch();
+  assert.equal(env.ctx.chain.bal(o.p.wallet), before + pool, 'sole owner gets the whole share');
+  assert.ok(env.ctx.chain.solBal(o.p.wallet) > solBefore, 'SOL fee share from the deed sale too');
+  assert.equal(r.ownerShare.BOO, pool);
 });
 
 test('owners earn from the epoch pool by trust-weighted unique visitors, not their own visits', () => {
   const env = setup();
   const o = env.login('Owner');
-  env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
+  giveSol(env, o.p, 5);
   env.game.buyDeed(o.token, 4);
   for (let i = 0; i < 3; i++) {
     o.p.knocks = 40;
@@ -461,18 +506,118 @@ test('gatekeepers: free at the right level, or a one-time bribe; you must be at 
   assert.equal(env.game.unlock(vet.token, 'witchwood', w.spot).bribed, false);
 });
 
-test('secret houses are hidden until discovered, and the Legendary Mansion opens for one hour', () => {
+test('secret houses are hidden until discovered, and the Legendary Mansion appears at random 20-40 min gaps', () => {
   const env = setup({ start: Date.parse('2026-10-08T18:00:00Z') });
   const { token, p } = env.login('Kid');
   assert.throws(() => env.game.house(901, token), /No such house/);
   assert.ok(!env.game.world(token).houses.some((h) => h.id === 901));
   p.discovered[902] = 2;
   assert.ok(env.game.world(token).houses.some((h) => h.id === 902));
-  env.clock.advance(5 * 3600_000); // 23:00 UTC
-  const w = env.game.world(token);
-  assert.ok(w.legendaryEvent.open);
-  assert.ok(w.houses.some((h) => h.id === 901));
+
+  const LE = season.legendaryEvent;
+  const MIN = 60_000;
+  // Step through 6 hours a minute at a time and record every opening.
+  const opens = [];
+  let wasOpen = false;
+  for (let i = 0; i < 6 * 60; i++) {
+    env.clock.advance(MIN);
+    const w = env.game.world(token);
+    assert.equal(JSON.stringify(w).includes('nextAt'), false, 'the next opening is never published');
+    if (w.legendaryEvent.open && !wasOpen) {
+      opens.push(env.clock.now());
+      assert.ok(w.houses.some((h) => h.id === 901));
+      assert.ok(w.legendaryEvent.closesAt - env.clock.now() <= LE.openMinutes * MIN);
+    }
+    wasOpen = w.legendaryEvent.open;
+  }
+  assert.ok(opens.length >= 8, `opened ${opens.length} times in 6h`);
+  const gaps = opens.slice(1).map((t, i) => (t - opens[i]) / MIN);
+  for (const g of gaps) assert.ok(g >= LE.minGapMinutes && g <= LE.maxGapMinutes + 1, `gap ${g}`);
+  assert.ok(new Set(gaps.map(Math.round)).size > 2, 'gaps are randomized');
   assert.ok(env.game.feed().some((f) => f.kind === 'event'));
+});
+
+// ---------------- raffles ----------------
+
+test('Town Raffle: rounds draw every 5 minutes, max 100 slots, free daily slot, 10 winners, fee-funded prizes held for verification', () => {
+  const env = setup();
+  const R = season.raffle;
+  const players = Array.from({ length: 12 }, (_, i) => {
+    const x = env.login('R' + i);
+    veteran(x.p);
+    x.p.stash = 2000;
+    return x;
+  });
+  const [a] = players;
+  assert.throws(() => env.game.raffle(a.token, R.maxSlots + 1), /Max 100/);
+  env.game.raffle(a.token, R.maxSlots);
+  assert.equal(a.p.stash, 2000 - R.maxSlots * R.slotPrice);
+  assert.throws(() => env.game.raffle(a.token, 1, true), /Max 100/);
+  for (const x of players.slice(1)) env.game.raffle(x.token, 1, true);
+  assert.throws(() => env.game.raffle(players[1].token, 1, true), /Free slot already used/);
+  // Fund the prize pool from fees: SOL deed sales.
+  env.ctx.chain.solTransfer('faucet', 'pool:prizes', toLamports(1), 'test');
+  const w = env.game.world(a.token);
+  assert.equal(w.raffle.yourSlots, R.maxSlots);
+  assert.ok(w.raffle.drawAt - env.clock.now() <= R.roundMinutes * 60_000);
+  const round = w.raffle.round;
+  env.clock.advance(R.roundMinutes * 60_000);
+  env.game.tick();
+  const last = env.game.world(a.token).raffle;
+  assert.equal(last.round, round + 1);
+  assert.equal(last.last.round, round);
+  assert.equal(last.last.winners.length, R.winners);
+  assert.equal(new Set(last.last.winners.map((x) => x.name)).size, R.winners, 'one prize per player');
+  const real = env.game.admin.redemptions().filter((r) => r.source === 'townRaffle');
+  assert.ok(real.length > 0, 'funded prizes become pending redemptions');
+  assert.ok(real.every((r) => r.status === 'pending verification'));
+  // The winner claims with age, region and contact; payout stays manual.
+  const winner = players.find((x) => x.p.id === real[0].playerId);
+  assert.throws(() => env.game.claimRafflePrize(winner.token, real[0].id, { region: 'US', contact: 'a@b.c' }), /18/);
+  env.game.claimRafflePrize(winner.token, real[0].id, { over18: true, region: 'US', contact: 'a@b.c' });
+  assert.equal(env.game.admin.redemptions().find((r) => r.id === real[0].id).status, 'pending payout');
+  // Unfunded pool → consolation prizes, never an IOU.
+  const before = env.game.admin.redemptions().length;
+  for (const x of players) env.game.raffle(x.token, 1);
+  env.clock.advance(R.roundMinutes * 60_000);
+  env.game.tick();
+  const after = env.game.admin.redemptions().length;
+  assert.ok(after - before <= R.winners);
+  assert.ok(env.ctx.prizePoolUsd() >= 0);
+});
+
+test('player raffles: escrow the item, sell candy slots, random winner gets it, seller gets candy minus the fee', () => {
+  const env = setup({ seed: 7 });
+  const s = env.login('Seller');
+  veteran(s.p);
+  env.ctx.chain.transfer('liquidity', s.p.wallet, 1000, 'test');
+  s.p.cards = { c01: 1 };
+  assert.throws(() => env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 7 }), /duration/);
+  const { auction } = env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 15 });
+  assert.equal(s.p.cards.c01, 0, 'card is in escrow');
+  const boo = env.game.createAuction(s.token, { item: { kind: 'boo', amount: 300 }, slotPrice: 5, maxSlots: 4, minutes: 5 }).auction;
+  assert.equal(env.ctx.chain.bal(s.p.wallet), 700);
+  assert.throws(() => env.game.enterAuction(s.token, auction, 1), /own raffle/);
+  const a = env.login('A');
+  const b = env.login('B');
+  for (const x of [a, b]) {
+    veteran(x.p);
+    x.p.stash = 500;
+  }
+  env.game.enterAuction(a.token, auction, 3);
+  env.game.enterAuction(b.token, auction, 2);
+  assert.throws(() => env.game.enterAuction(a.token, auction, 6), /Only 5 slots left/);
+  assert.throws(() => env.game.cancelAuction(s.token, auction), /already bought/);
+  const stash = s.p.stash;
+  env.clock.advance(15 * 60_000);
+  env.game.tick();
+  const got = (a.p.cards.c01 || 0) + (b.p.cards.c01 || 0);
+  assert.equal(got, 1, 'exactly one winner');
+  assert.equal(s.p.stash, stash + 50 - Math.floor(50 * season.raffle.auction.candyFee));
+  // The $BOO raffle had no entrants: it goes back to the seller.
+  assert.equal(env.ctx.chain.bal(s.p.wallet), 1000);
+  assert.equal(env.game.auctions(s.token).open.length, 0);
+  assert.ok(boo);
 });
 
 // ---------------- candy sinks ----------------
@@ -492,12 +637,11 @@ test('shop: costumes (candy and $BOO), boosts, training, raffle', () => {
   env.ctx.chain.transfer('liquidity', p.wallet, 200, 'test');
   const burned = env.ctx.chain.state.supply.burned;
   env.game.buy(token, 'costume', 'headless');
-  assert.equal(env.ctx.chain.state.supply.burned, burned + 60);
+  const price = season.costumes.headless.booPrice;
+  const fee = Math.floor(price * season.fees.rate);
+  const expectBurn = Math.floor(fee * season.fees.split.burn) + Math.floor((price - fee) * season.cosmeticBurnShare);
+  assert.equal(env.ctx.chain.state.supply.burned, burned + expectBurn);
   assert.throws(() => env.game.buy(token, 'costume', 'banshee'), /Not for sale/);
-  env.game.raffle(token, 3);
-  env.clock.advance(86_400_000);
-  env.game.me(token);
-  assert.ok(p.ownedCostumes.includes('banshee'), 'sole raffle entrant wins');
 });
 
 test('cards: craft duplicates up a rarity, mint epics on-chain, full deck unlocks a prize', () => {
@@ -610,7 +754,7 @@ test('empty lots cannot be knocked until someone buys them; NPC homes are not fo
   assert.equal(env.game.house(1, token).forSale, false);
   assert.ok(!env.game.world(token).route.some((id) => PLOTS.includes(id)));
   const o = env.login('Owner');
-  env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
+  giveSol(env, o.p, 5);
   env.game.buyDeed(o.token, 4);
   env.clock.advance(1000);
   env.game.knock(token, 4, { holdMs: 100 });

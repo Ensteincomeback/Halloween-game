@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { GameError, HOUR } from './core.js';
 import { OUTCOMES } from './knock.js';
+import { toLamports } from './chain.js';
 
 export function installDev(ctx) {
   const { season, state, chain } = ctx;
@@ -81,6 +82,44 @@ export function installDev(ctx) {
     event(p, open = true) {
       state.global.devEvent = !!open;
       ctx.tickWorld();
+    },
+    // Make the Legendary Mansion's random schedule fire in a few seconds.
+    eventSoon() {
+      state.global.devEvent = false;
+      const L = ctx.legendarySchedule();
+      L.openUntil = 0;
+      L.nextAt = now() + 3000;
+    },
+    sol(p, amount = 10) {
+      chain.solTransfer('faucet', p.wallet, toLamports(Math.max(0.001, Number(amount))), 'dev grant');
+    },
+    // Draw the current Town Raffle round right now (with a few bot entrants so
+    // there are enough players for real prizes).
+    drawRaffle(p, withBots = true) {
+      const r = ctx.raffleView(p);
+      if (withBots) {
+        for (let i = 0; i < 3; i++) {
+          let bot = Object.values(state.players).find((x) => x.devBot === i);
+          if (!bot) {
+            bot = ctx.newPlayer(`Raffle Bot ${i + 1}`, `dev-${crypto.randomBytes(4).toString('hex')}`).player;
+            bot.devBot = i;
+          }
+          bot.xp = Math.max(bot.xp, 100);
+          bot.trust = 80;
+          state.townRaffle.entries[bot.id] ??= { slots: 1 + i, free: 0 };
+        }
+      }
+      return { round: r.round, result: ctx.drawTownRaffle() };
+    },
+    // Seed the prize pool so funded prizes can be tested.
+    fundPrizes(p, usd = 50) {
+      const lamports = toLamports(Number(usd) / season.fees.usdRate.SOL);
+      chain.solTransfer('faucet', 'pool:prizes', lamports, 'dev prize pool seed');
+    },
+    // End all running player raffles now.
+    endAuctions() {
+      for (const a of Object.values(state.auctions)) a.endsAt = now();
+      ctx.tickRaffles();
     },
     // A rival player-monster with a lair on a house, so you can be its victim.
     rival(p, houseId, kind = 'ambush') {

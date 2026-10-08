@@ -78,7 +78,13 @@ const routes = {
   'POST /api/equip': (t, b) => game.equip(t, b.costumeId),
   'POST /api/train': (t, b) => game.train(t, b.stat),
   'POST /api/unlock': (t, b) => game.unlock(t, b.neighborhood, b.pos),
-  'POST /api/raffle': (t, b) => game.raffle(t, b.tickets),
+  'POST /api/raffle': (t, b) => game.raffle(t, b.slots, b.free),
+  'POST /api/raffle/claim': (t, b) => game.claimRafflePrize(t, b.id, b.details),
+  'GET /api/auctions': (t) => game.auctions(t),
+  'POST /api/auction/create': (t, b) => game.createAuction(t, { item: b.item, slotPrice: b.slotPrice, maxSlots: b.maxSlots, minutes: b.minutes }),
+  'POST /api/auction/enter': (t, b) => game.enterAuction(t, b.id, b.slots),
+  'POST /api/auction/cancel': (t, b) => game.cancelAuction(t, b.id),
+  'POST /api/sol-faucet': (t) => game.solFaucet(t),
   'POST /api/craft': (t, b) => game.craft(t, b.cardId),
   'POST /api/mint-card': (t, b) => game.mintCard(t, b.cardId),
   'POST /api/prize': (t, b) => game.redeemPrize(t, b.prizeId),
@@ -145,6 +151,16 @@ const server = http.createServer((req, res) => {
   if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   serveStatic(res, url);
 });
+
+// The world clock runs even when nobody is polling: the Legendary Mansion
+// schedule, Town Raffle draws and player raffles all settle here.
+setInterval(() => {
+  try {
+    game.tick();
+  } catch (err) {
+    console.error(err);
+  }
+}, 2000).unref();
 
 server.listen(port, () => {
   console.log(`🎃 Knock is running at http://localhost:${port}${DEV ? '  [DEV BUILD: dev panel enabled]' : ''}`);

@@ -290,3 +290,40 @@ kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--
 .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--bg2); border: 2px solid var(--line); padding: 8px 10px; }
 .setting-row input[type=checkbox] { width: 18px; height: 18px; }
 .gold-badge { background: #ffd34d22 !important; color: var(--gold) !important; }
+
+/* ---------- v6: notifications, raffle widget, inventory ---------- */
+#notes { position: absolute; top: 244px; right: 16px; width: 290px; display: grid; gap: 8px; z-index: 6; pointer-events: none; }
+.note { position: relative; pointer-events: auto; background: #1d1630f2; border: 2px solid var(--line); padding: 10px 30px 12px 12px; font-size: 13px; line-height: 1.35; box-shadow: 0 4px 0 #0008; animation: note-in .25s ease-out; overflow: hidden; }
+.note.gold { border-color: #7a6520; background: #2e2610f2; color: var(--gold); }
+.note.clickable .note-body { cursor: pointer; }
+.note.out { animation: note-out .25s ease-in forwards; }
+.note-x { position: absolute; top: 4px; right: 4px; background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 6px; }
+.note-x:hover { color: var(--text); }
+.note-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: currentColor; opacity: .5; transform-origin: left; animation: note-timer linear forwards; }
+@keyframes note-in { from { transform: translateX(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes note-out { to { transform: translateX(110%); opacity: 0; } }
+@keyframes note-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+#raffle-widget { position: absolute; top: 80px; left: 16px; z-index: 4; display: grid; gap: 1px; text-align: left; min-width: 150px; padding: 6px 10px; background: #1d1630e6; border: 2px solid #6a3d8a; color: var(--text); font: inherit; cursor: pointer; box-shadow: 0 3px 0 #0008; }
+#raffle-widget:hover { border-color: var(--gold); }
+#raffle-widget .rw-title { font-size: 10px; letter-spacing: 1px; color: #c9a3e8; }
+#raffle-widget .rw-time { font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
+#raffle-widget .rw-sub { font-size: 11px; color: var(--muted); }
+#raffle-widget.soon { animation: rw-pulse 1s infinite; }
+@keyframes rw-pulse { 50% { border-color: var(--gold); } }
+
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 8px 0; }
+.inv-cell { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; background: var(--bg2); border: 2px solid var(--line); text-align: center; font-size: 12px; }
+.inv-cell.on { border-color: var(--gold); }
+.inv-icon { font-size: 22px; }
+.inv-name { font-weight: bold; word-break: break-word; }
+.inv-sub { color: var(--muted); font-size: 11px; }
+.inv-cell .btn { margin-top: 2px; }
+.auction-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; align-items: end; margin: 8px 0; }
+.auction-form label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.auction-form input, .auction-form select { width: 100%; }
+@media (hover: none), (max-width: 760px) {
+  #notes { top: 150px; right: 8px; width: min(260px, 70vw); }
+  #raffle-widget { top: auto; bottom: 136px; left: 16px; min-width: 0; padding: 4px 8px; }
+  #raffle-widget .rw-time { font-size: 16px; }
+}

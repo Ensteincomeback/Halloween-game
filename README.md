@@ -20,7 +20,7 @@ Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DA
 > **Devnet.** The "chain" is a simulated ledger inside the server (`server/chain.js`):
 > hash-linked blocks plus programs for the token, NFTs, the staking bond, escrow, signed
 > claims and anchors. It has the same shape as the Solana programs the game needs, so it
-> can be swapped for a real client. $BOO here is test currency, from a once-a-day devnet faucet.
+> can be swapped for a real client. $BOO and SOL here are test currency, from once-a-day devnet faucets.
 
 ## The world (2D pixel art)
 
@@ -51,7 +51,13 @@ lamps, windows, porch lights and the candle in your bucket.
 - **The Candy Bank** is a building in the square. Walk your bucket there and press `E`.
 - **Town shops**: the square is lined with shops you walk into: *Spooky Threads*
   (costumes), *Sugar Rush* (boosts and upgrades), *Crypt Cards* (card crafting and minting),
-  the *Courage Dojo* (stat training) and the *Raffle Tent*. The menu's Shop tab sells the same things.
+  the *Courage Dojo* (stat training) and the *Raffle Tent* (Town Raffle and player raffles).
+  The menu's Shop tab sells the same things.
+- **Inventory**: press `I` (or 🎒) for everything you've collected: candy, $BOO, SOL,
+  costumes, monster cards and card NFTs, items and boosts, houses, secret-house keys,
+  trophies, raffle slots and prizes.
+- **Notifications** (Legendary Mansion, raffle draws, secret houses, wins) slide in on the
+  right, fade after 15 seconds and can be closed early with ✕.
 - **Townsfolk missions**: Mayor Gourd (square), Old Mrs. Hollow (Hollow Lane), Gravedigger
   Mort (Crypt Row) and Hazel the witch (Witchwood) each offer one mission a day. A **!**
   means a new mission; walk up and press `E` to accept. Progress counts from then, and a
@@ -81,12 +87,15 @@ leaves in the value is ignored). The start menu shows **DEV BUILD** when it's on
 The dev panel only exists when the server runs with `DEV=1`. Its `/api/dev/*` endpoints
 are not registered otherwise. It lets you skip the grind:
 
-- +10k / +1M candy, fill your bucket, +5k $BOO, 999 knocks, set any level
+- +10k / +1M candy, fill your bucket, +5k $BOO, +10 SOL, 999 knocks, set any level
 - become any Scare Actor instantly (stake and bond warm-up skipped, full Fright)
 - unlock every neighborhood, costume, monster card or secret house
 - **force the next knock** (any outcome, including a Golden Pumpkin jackpot)
 - spawn a rival player-monster's ambush or trap at the nearest house, clear your shield
-- open the Legendary Mansion, settle owner/monster payouts now, start a new day
+- open the Legendary Mansion (or make its random schedule fire in 3s), settle owner/monster
+  payouts now, start a new day
+- seed the raffle prize pool, draw the Town Raffle now (with 3 bot entrants), end every
+  player raffle now
 - teleport anywhere, turn off the travel-speed check, and replay the tutorial
 
 ## The game
@@ -105,7 +114,8 @@ are not registered otherwise. It lets you skip the grind:
 - **3 neighborhoods**: Hollow Lane, Crypt Row (level 4, 1.5× candy) and Witchwood Heights
   (level 8, 2× candy), each unlocked with candy.
 - **Secret houses** are found by rare knocks. The **Legendary Mansion** opens to everyone
-  for one hour a day.
+  for 5 minutes at a **random** time every 20–40 minutes. The server picks the next opening
+  with its RNG and never sends it to clients, so bots can't camp the door.
 - Daily missions, a forgiving streak, a daily route, a rotating Hot House, and a pity timer
   (rare-or-better within 40 knocks).
 
@@ -135,16 +145,18 @@ are not registered otherwise. It lets you skip the grind:
   for sale). Each type shifts the odds table within protocol caps.
 - **Only empty lots are for sale** (11 across the three neighborhoods, set per season in
   `plots`). NPC homes can be knocked on but never bought.
-- **Deeds are NFTs**, bought with $BOO and capped at 3 per wallet, and traded on an escrow
-  marketplace (5% fee, half burned).
+- **Deeds are NFTs**, bought with **SOL** (0.3–1.5 SOL by house type) and capped at 3 per
+  wallet, and resold for SOL on an escrow marketplace (5% fee, routed like every other fee).
 - **Public stats card**: visits, candy given, players scared, jackpots, monster attacks,
   reputation (0–100). Reputation is trust-weighted, time-decayed, capped per visitor, and
   ignores the owner's own visits. A hash of all house stats is anchored on-chain every day.
 - **Behavior Dial** (Generous / Balanced / Haunted): changes take **24h** and are posted to
   the house log and the global feed. Owners *can* turn a beloved house into a trap, but
   everyone gets a warning. This "who do you trust" layer is the social core of the game.
-- **Owner revenue comes from real activity, not new buyers**: half of candy entry fees at
-  premium houses, a 10% tax on monster hauls at the house, and a daily **Haunt Pool** in
+- **Owner revenue comes from real activity, not new buyers**: **+2 candy for every new
+  trusted visitor per day**, half of candy entry fees at premium houses, a 10% tax on
+  monster hauls at the house, **a share of 2% of every transaction fee** ($BOO and SOL, split
+  evenly per owned house, paid daily to the owner's wallet), and a daily **Haunt Pool** in
   $BOO. The pool is funded by a share of that day's revenue and split by *square-root* of
   trust-weighted unique visitors, so owning more houses doesn't scale linearly. **Lanterns**
   ($BOO, half burned) add traffic and pool weight.
@@ -153,8 +165,8 @@ are not registered otherwise. It lets you skip the grind:
 - **Faucets**: knocks, missions, streaks, defended ambushes. Each is throttled by a daily
   soft cap and a hard cap, and scaled by account trust.
 - **Sinks**: costumes, boosts (Lucky Lollipop, Night Vision, Monster Repellent), bag/stash
-  upgrades, stat training, neighborhood unlocks, entry fees, card crafting, a daily cosmetic
-  raffle, candy thrown at monsters, monster fines, and bounties.
+  upgrades, stat training, neighborhood unlocks, entry fees, card crafting, raffle slots
+  (and the 10% cut of player raffles), candy thrown at monsters, monster fines, and bounties.
 - Every faucet and sink is counted. `GET /api/economy` reports the sink ratio and token supply.
 
 ### $BOO (optional, never required to play)
@@ -168,13 +180,40 @@ are not registered otherwise. It lets you skip the grind:
 - Knock rewards are capped (25 $BOO/day), trust-gated, and paid by **server-signed claim
   tickets** that the chain verifies (signature + nonce) before paying from a funded vault.
 
+### Transaction fees
+Every $BOO or SOL payment (deeds, lanterns, premium costumes, market sales) carries a
+**5% fee**, split by `fees.split` in the Season Pack: **2% to house owners**, **40% to the
+raffle prize pool**, **30% burned** ($BOO only) and the rest to the treasury. Splits keep
+fractional carry, so small fees still add up exactly. `GET /api/economy` shows the totals.
+
+### Raffles
+- **Town Raffle**: a round draws every **5 minutes** (countdown on the left of the screen,
+  plus a notification a minute before and when results are in). Slots cost 5 candy, up to
+  **100 per player per round**, plus **one free slot a day**. Slots weight the draw, and
+  **10 different players** win each round.
+- Prizes ($5 / $2 / $1 cash and small fractional-stock amounts) are paid **only from the
+  prize pool**, which is funded by transaction fees and valued at the season's `usdRate`.
+  A won prize is reserved from the pool and recorded as a **pending redemption**. The winner
+  claims it with an 18+ confirmation, region and email, and an admin pays it out by hand.
+  If the pool can't cover a prize, or the round has fewer than 3 players, or the winner's
+  account isn't established yet (trust ≥ 60), the winner gets candy instead (the first
+  winner gets the Moonlit Banshee costume). `raffle.realPrizes: false` turns cash and stock
+  prizes off entirely.
+- **Player raffles** (the auction house): raffle off $BOO, a monster card or a card NFT. The
+  item goes into escrow; you set the slot price (1–500 candy), number of slots (2–100) and
+  duration (5–60 min). One random slot wins it; the seller gets the candy minus 10%, which is
+  burned. No entries means the item comes back. Max 3 running raffles per player.
+- *Legal note*: paid-entry random draws for cash or securities are regulated as lotteries
+  or sweepstakes in most places. Putting it on Solana doesn't change that. The free daily
+  slot, published odds, 18+ check and manual payouts are the usual sweepstakes guardrails,
+  but have gaming counsel review the rules (and use a licensed broker for stock prizes)
+  before real money is attached.
+
 ### Collectibles and real-world prizes
 - **12 original monster cards** (our own IP: no Pokémon or other brands). Duplicates craft
   up a rarity, and Epic and Legendary cards can be minted to the wallet as NFTs.
-- **Real-world prizes are milestone- and rank-based only**: a full card deck, 5
-  legendaries, or a season top-3 finish. They are **never** a random drop, because
-  prize + chance + paid entry is the legal test for an illegal lottery in most places.
-  Redemption needs an established account (trust ≥ 60) and goes to manual review, where
+- **Milestone prizes**: a full card deck, 5 legendaries, or a season top-3 finish earn
+  merch prizes (separate from the Town Raffle). Redemption needs an established account (trust ≥ 60) and goes to manual review, where
   shipping, KYC, tax and geo-restrictions are handled.
   *Get gaming and securities counsel before attaching real value to anything.*
 
@@ -235,8 +274,9 @@ server/core.js     Players, energy, candy flow, trust, feed
 server/knock.js    Odds, outcomes, scares, ambushes, traps
 server/houses.js   Neighborhoods, reputation, deeds, dial, owner revenue, daily epoch
 server/monsters.js License, Fright, lairs, monster results, bounties
-server/economy.js  Shop, training, raffle, cards, prizes, claims, missions
-server/chain.js    Simulated chain: token, NFTs, stake, escrow, signed claims, anchors
+server/economy.js  Shop, training, cards, prizes, claims, faucets, missions
+server/raffle.js   Transaction fee router, Town Raffle, prize pool, player raffles
+server/chain.js    Simulated chain: $BOO, SOL, NFTs, stake, escrow, signed claims, anchors
 server/config.js   Season Pack loader (extends + merge)
 server/layout.js   World layout (houses, doors, bank, gates, gatekeepers), shared with the client
 server/dev.js      Dev-build shortcuts (only with DEV=1)
