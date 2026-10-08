@@ -88,6 +88,7 @@ export function installCore(ctx) {
       seasons: {}, day: null, daily: null, streak: { count: 0, lastDay: null, graceUsedWeek: null },
       lastEvent: null, discovered: {}, unlocked: [season.neighborhoods[0].id], inbox: [],
       claimable: 0, monster: null, redemptions: {},
+      lastPos: ctx.layout ? { ...ctx.layout.spawn, t: now() } : null,
     };
     state.players[id] = p;
     state.tokens[token] = id;
@@ -222,6 +223,25 @@ export function installCore(ctx) {
     p.stash -= fromStash;
     p.bag -= price - fromStash;
     ctx.track('out', source, price);
+  };
+
+  // ---------- anti-teleport: actions happen at places in the 3D world ----------
+  // The client moves freely, but the server knows where every door and the
+  // bank are. Two actions further apart than a running player could cover in
+  // the time between them are rejected.
+  ctx.checkTravel = (p, to) => {
+    const T = season.travel;
+    const from = p.lastPos;
+    if (!from || !T) return;
+    const dist = Math.hypot(to.x - from.x, to.z - from.z);
+    const reach = (T.maxSpeed * (now() - from.t + T.graceMs)) / 1000;
+    if (dist > reach) {
+      p.trust = Math.max(0, p.trust - 3);
+      throw new GameError("You can't get there that fast. Walk!", 429);
+    }
+  };
+  ctx.arrive = (p, at) => {
+    p.lastPos = { x: at.x, z: at.z, t: now() };
   };
 
   // ---------- anti-bot: the knock gesture ----------

@@ -198,3 +198,41 @@ h3 { font-size: 15px; color: var(--orange2); }
 .inbox-item { font-size: 13px; padding: 6px 8px; border-left: 3px solid var(--purple); background: var(--bg2); border-radius: 6px; margin-bottom: 6px; }
 .banner.gold { background: #3a3110; border-color: #7a6520; color: var(--gold); }
 .locked-hood { background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); padding: 18px; }
+
+/* ---- v3: 3D world ---- */
+#game { position: fixed; inset: 0; overflow: hidden; }
+#stage { position: absolute; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#stage canvas:active { cursor: grabbing; }
+#game .hud { position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(180deg, #120d1df0, #120d1d00); border: 0; backdrop-filter: none; pointer-events: none; }
+#game .hud > * { pointer-events: auto; }
+#banners { position: absolute; top: 74px; left: 0; right: 0; display: grid; justify-items: center; gap: 6px; pointer-events: none; z-index: 4; }
+#banners .banner { margin: 0; }
+#minimap { position: absolute; top: 80px; right: 16px; width: 150px; height: 150px; border-radius: 50%; border: 2px solid var(--line); z-index: 4; }
+#prompt { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); background: #120d1de8; border: 1px solid var(--orange); border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 15px; z-index: 5; max-width: min(560px, calc(100vw - 32px)); }
+#prompt .gold, .gold { color: var(--gold); }
+kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px; padding: 0 6px; font: 600 12px/1.6 ui-monospace, monospace; color: var(--orange2); }
+#btn-action { position: absolute; right: 24px; bottom: 28px; width: 96px; height: 96px; border-radius: 50%; font-size: 16px; z-index: 6; display: none; }
+#joystick { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 2px solid #ffffff44; background: #ffffff10; z-index: 6; pointer-events: none; }
+#joystick-knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: #ff8a1fcc; }
+#controls-hint { position: absolute; bottom: 12px; left: 16px; font-size: 12px; color: var(--muted); background: #120d1daa; padding: 4px 10px; border-radius: 8px; z-index: 4; }
+#drawer { position: absolute; top: 72px; right: 0; bottom: 0; width: min(400px, 100vw); transform: translateX(105%); transition: transform .2s ease; z-index: 8; border-radius: 14px 0 0 0; max-height: none; }
+#drawer.open { transform: none; }
+#drawer .tab { max-height: calc(100vh - 130px); }
+#btn-close-drawer { flex: 0 0 auto !important; color: var(--text) !important; }
+@media (hover: none), (max-width: 760px) {
+  #btn-action:not([hidden]) { display: block; }
+  #controls-hint { display: none; }
+  #prompt { bottom: 140px; font-size: 13px; }
+  #prompt kbd { display: none; }
+  #minimap { width: 110px; height: 110px; top: auto; bottom: 28px; right: auto; left: 16px; }
+  #game .hud { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+  #game .hud .logo { display: none; }
+  .hud-stats { gap: 8px; }
+  .stat .val { font-size: 14px; }
+  #btn-menu kbd { display: none; }
+  #drawer { top: 100px; }
+}
+#loading { position: absolute; inset: 0; z-index: 20; display: grid; place-content: center; text-align: center; gap: 8px; background: var(--bg); }
+#loading .bar { width: 240px; height: 6px; margin: 0 auto; }
+#loading .bar > div { background: var(--orange); }

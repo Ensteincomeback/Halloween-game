@@ -13,8 +13,17 @@ export function installEconomy(ctx) {
   state.redemptions ??= [];
 
   // ---------- banking ----------
-  ctx.bank = (p) => {
+  // The Candy Bank is a building in the town square: you have to walk there.
+  ctx.bank = (p, pos) => {
     if (p.pending) throw new GameError(`Finish the ${p.pending.type} first!`, 409);
+    const B = ctx.layout.bank.door;
+    const x = Number(pos?.x);
+    const z = Number(pos?.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - B.x, z - B.z) > season.travel.bankRadius) {
+      throw new GameError('Walk to the Candy Bank in the town square to deposit.', 403);
+    }
+    ctx.checkTravel(p, B);
+    ctx.arrive(p, B);
     const moved = Math.min(p.stashCapacity - p.stash, p.bag);
     p.bag -= moved;
     p.stash += moved;

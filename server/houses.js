@@ -18,6 +18,7 @@ export function installHouses(ctx) {
       const id = nextId++;
       const h = (state.houses[id] ??= blankHouse(id, type, hood.names[i % hood.names.length]));
       h.neighborhood = hood.id; // a new season may rename or reskin; ids stay
+      h.plot = (hood.plots || []).includes(i); // empty NFT lot vs. NPC home
       h.name = hood.names[i % hood.names.length];
     });
   }
@@ -68,7 +69,9 @@ export function installHouses(ctx) {
     return tells[hashInt(season.id, 'tell', id, d) % tells.length];
   };
 
-  const publicIds = () => Object.values(state.houses).filter((h) => !h.secret).map((h) => h.id);
+  // Knockable = an NPC home, or an empty lot someone has bought and moved into.
+  ctx.knockable = (h) => !h.plot || !!h.deed;
+  const publicIds = () => Object.values(state.houses).filter((h) => !h.secret && ctx.knockable(h)).map((h) => h.id);
 
   ctx.hotHouse = (d = ctx.today()) => {
     const ids = publicIds().filter((id) => state.houses[id].neighborhood === season.neighborhoods[0].id);
@@ -180,7 +183,7 @@ export function installHouses(ctx) {
   ctx.buyDeed = (p, houseId) => {
     const h = ctx.house(houseId);
     const ht = season.houseTypes[h.type];
-    if (h.secret || !ht.price) throw new GameError('This house is not for sale');
+    if (!h.plot || !ht.price) throw new GameError('Somebody lives here. Only empty houses are for sale.');
     if (h.deed) throw new GameError('Already owned. Check the market.');
     if (housesOwnedBy(p).length >= H.maxPerWallet) throw new GameError(`Max ${H.maxPerWallet} houses per wallet`);
     chain.transfer(p.wallet, 'treasury', ht.price, `deed #${h.id}`);
@@ -361,7 +364,8 @@ export function installHouses(ctx) {
       jackpotsToday: todays.filter((e) => e.detail?.jackpot).length,
       legendariesToday: todays.filter((e) => e.outcome === 'legendary').length,
       owner: owner ? { name: owner.name, isYou: owner.id === p?.id } : null,
-      price: !h.deed && !h.secret ? ht.price : null,
+      plot: !!h.plot, forSale: !!h.plot && !h.deed, knockable: ctx.knockable(h),
+      price: h.plot && !h.deed ? ht.price : null,
       listing: listing ? { price: listing.price } : null,
       value: ctx.houseValue(h),
       dial: h.dial, dialName: H.dial[h.dial].name,

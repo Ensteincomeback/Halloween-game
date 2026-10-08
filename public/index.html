@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Knock: Trick-or-Treat</title>
   <meta name="description" content="Knock on doors. Collect candy. Survive monsters.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎃</text></svg>">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
 </head>
 <body>
   <!-- Login -->
@@ -24,6 +25,9 @@
 
   <!-- Game -->
   <section id="game" class="screen" hidden>
+    <div id="stage"></div>
+    <div id="loading" hidden><div class="logo">🎃 Knock</div><p>Building the neighborhood…</p><div class="bar"><div id="loading-bar"></div></div></div>
+
     <header class="hud">
       <div class="hud-left">
         <span class="logo small">🎃 Knock</span>
@@ -31,53 +35,48 @@
       </div>
       <div class="hud-stats">
         <div class="stat" title="Knocks left (refill over time and daily)"><span class="lbl">Knocks</span><span id="hud-knocks" class="val"></span><span id="hud-regen" class="sub"></span></div>
-        <div class="stat" title="Candy in your bag can be stolen. Bank it at home."><span class="lbl">Bag</span><span id="hud-bag" class="val"></span><div class="bar"><div id="hud-bag-bar"></div></div></div>
-        <div class="stat" title="Candy in your stash is safe"><span class="lbl">Stash</span><span id="hud-stash" class="val"></span></div>
-        <div class="stat" title="Danger rises the longer you stay out. Walk home to reset."><span class="lbl">Night</span><span id="hud-night" class="val"></span><div class="bar night"><div id="hud-night-bar"></div></div></div>
+        <div class="stat" title="Candy in your bucket can be stolen. Deposit it at the Candy Bank."><span class="lbl">Bucket</span><span id="hud-bag" class="val"></span><div class="bar"><div id="hud-bag-bar"></div></div></div>
+        <div class="stat" title="Candy in the bank is safe"><span class="lbl">Bank</span><span id="hud-stash" class="val"></span></div>
+        <div class="stat" title="Danger rises the longer you stay out. A bank trip resets it."><span class="lbl">Night</span><span id="hud-night" class="val"></span><div class="bar night"><div id="hud-night-bar"></div></div></div>
         <div class="stat" title="Daily streak"><span class="lbl">Streak</span><span id="hud-streak" class="val"></span></div>
         <div class="stat" id="hud-boo-wrap" hidden title="Your $BOO balance"><span class="lbl">$BOO</span><span id="hud-boo" class="val"></span></div>
       </div>
-      <button id="btn-home" class="btn home">🏡 Walk home &amp; bank</button>
+      <button id="btn-menu" class="btn">☰ Menu <kbd>Tab</kbd></button>
     </header>
 
     <div id="banners"></div>
+    <canvas id="minimap" width="180" height="180" title="Map: pink = Candy Bank, yellow = for sale, orange = Hot House, white = today's route"></canvas>
+    <div id="prompt" hidden></div>
+    <button id="btn-action" class="btn primary" hidden>Knock</button>
+    <div id="joystick" hidden><div id="joystick-knob"></div></div>
+    <div id="controls-hint">WASD move · Shift run · drag to look · E knock · Tab menu</div>
 
-    <main class="layout">
-      <section class="street-wrap">
-        <div class="street-head">
-          <h2 id="street-name"></h2>
-          <div class="legend"><span>🔥 Hot House (2× candy)</span><span>⭐ Today's route</span><span>🏷️ For sale</span></div>
-        </div>
-        <div id="hoods" class="hoods"></div>
-        <div id="street" class="street"></div>
-      </section>
-
-      <aside class="side">
-        <nav class="tabs" role="tablist">
-          <button data-tab="porch" class="active">Porch</button>
-          <button data-tab="missions">Missions</button>
-          <button data-tab="shop">Shop</button>
-          <button data-tab="board">Board</button>
-          <button data-tab="leaders">Leaders</button>
-          <button data-tab="feed">Feed</button>
-          <button data-tab="me">Me</button>
-          <button data-tab="streets" id="tab-btn-streets" hidden>Streets</button>
-        </nav>
-        <div id="tab-porch" class="tab active"></div>
-        <div id="tab-missions" class="tab"></div>
-        <div id="tab-shop" class="tab"></div>
-        <div id="tab-board" class="tab"></div>
-        <div id="tab-leaders" class="tab"></div>
-        <div id="tab-feed" class="tab"></div>
-        <div id="tab-me" class="tab"></div>
-        <div id="tab-streets" class="tab"></div>
-      </aside>
-    </main>
+    <aside id="drawer" class="side">
+      <nav class="tabs" role="tablist">
+        <button data-tab="porch" class="active">House</button>
+        <button data-tab="missions">Missions</button>
+        <button data-tab="shop">Shop</button>
+        <button data-tab="board">Board</button>
+        <button data-tab="leaders">Leaders</button>
+        <button data-tab="feed">Feed</button>
+        <button data-tab="me">Me</button>
+        <button data-tab="streets" id="tab-btn-streets" hidden>Streets</button>
+        <button id="btn-close-drawer" title="Close">✕</button>
+      </nav>
+      <div id="tab-porch" class="tab active"></div>
+      <div id="tab-missions" class="tab"></div>
+      <div id="tab-shop" class="tab"></div>
+      <div id="tab-board" class="tab"></div>
+      <div id="tab-leaders" class="tab"></div>
+      <div id="tab-feed" class="tab"></div>
+      <div id="tab-me" class="tab"></div>
+      <div id="tab-streets" class="tab"></div>
+    </aside>
   </section>
 
   <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
   <div id="toast" class="toast" hidden></div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

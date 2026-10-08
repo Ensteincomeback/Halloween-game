@@ -1,10 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, buildOdds, rollOutcome, OUTCOMES } from '../server/game.js';
-import { loadSeason } from '../server/config.js';
+import { loadSeason, deepMerge } from '../server/config.js';
+import { buildLayout } from '../server/layout.js';
 
 const SEASON_FILE = new URL('../season/halloween-2026.json', import.meta.url).pathname;
 const season = loadSeason(SEASON_FILE);
+const BANK = buildLayout(season).bank.door;
+const PLOTS = [3, 4, 8, 13, 20]; // empty NFT lots on Hollow Lane
 
 // Deterministic PRNG (mulberry32).
 function prng(seed) {
@@ -18,7 +21,9 @@ function prng(seed) {
 }
 
 let ipCounter = 0;
-function setup({ seed = 1, start = Date.parse('2026-10-08T18:00:00Z'), s = season } = {}) {
+function setup({ seed = 1, start = Date.parse('2026-10-08T18:00:00Z'), s = season, realTravel = false } = {}) {
+  // Most rule tests hop between houses instantly; travel has its own test.
+  if (!realTravel) s = deepMerge(s, { travel: { maxSpeed: 1e9 } });
   let t = start;
   const clock = { now: () => t, advance: (ms) => (t += ms) };
   const game = createGame({ season: s, state: {}, now: clock.now, rng: prng(seed) });
@@ -133,7 +138,7 @@ test('pity timer guarantees rare-or-better within the limit', () => {
       if (['rare', 'legendary', 'token', 'secretHouse'].includes(r.outcome)) since = 0;
       else since += 1;
       assert.ok(since < season.pity.rareOrBetterWithin, `seed ${seed}`);
-      if (i % 10 === 0) env.game.bank(token);
+      if (i % 10 === 0) env.game.bank(token, BANK);
     }
   }
 });
@@ -146,7 +151,7 @@ test('scare: early or late fails, in the window wins (server clock)', () => {
       p.knocks = 40;
       p.items.candle = 0;
       env.clock.advance(1100 + (jitter += 71) % 300);
-      const { result } = env.game.knock(token, 4, { holdMs: 90 });
+      const { result } = env.game.knock(token, 15, { holdMs: 90 });
       if (result.scare) return result.scare;
       if (result.ambush) env.game.resolveAmbush(token, result.ambush.id, 'salt');
     }
@@ -171,7 +176,7 @@ test('bag vs stash: banking moves candy home and resets Nightfall; ambush never 
   }
   assert.ok(env.game.me(token).player.nightfall >= 1);
   const before = { bag: p.bag, stash: p.stash };
-  const r = env.game.bank(token);
+  const r = env.game.bank(token, BANK);
   assert.equal(r.banked, before.bag);
   assert.equal(r.player.nightfall, 0);
   assert.equal(r.player.stash, before.stash + before.bag);
@@ -239,7 +244,7 @@ test('player monster lair ambush: success steals from bag, taxes the house owner
   const owner = env.login('Owner');
   veteran(owner.p);
   env.ctx.chain.transfer('liquidity', owner.p.wallet, 1000, 'test');
-  env.game.buyDeed(owner.token, 1);
+  env.game.buyDeed(owner.token, 4);
   const v = env.login('Victim');
   veteran(v.p);
   v.p.ipHash = 'different';
@@ -248,11 +253,11 @@ test('player monster lair ambush: success steals from bag, taxes the house owner
     m.p.monster.fright = 100;
     m.p.monster.stunnedUntil = 0;
     env.ctx.state.lairs = [];
-    env.game.setLair(m.token, 1, 'ambush');
+    env.game.setLair(m.token, 4, 'ambush');
     for (let k = 0; k < 20; k++) {
       Object.assign(v.p, { knocks: 40, bag: 100, shieldUntil: 0, monsterHits: {}, pity: 0 });
       env.clock.advance(1000 + (k % 5) * 77);
-      const { result } = env.game.knock(v.token, 1, { holdMs: 100 });
+      const { result } = env.game.knock(v.token, 4, { holdMs: 100 });
       if (result.scare) {
         env.clock.advance(result.scare.delayMs + 300);
         env.game.resolveScare(v.token, result.scare.id);
@@ -263,7 +268,7 @@ test('player monster lair ambush: success steals from bag, taxes the house owner
         if (!r.won) {
           const take = -r.candy;
           assert.equal(take, Math.ceil(100 * season.monster.types.vampire.stealShare));
-          assert.equal(env.ctx.state.houses[1].till, Math.floor(take * season.monster.houseTax));
+          assert.equal(env.ctx.state.houses[4].till, Math.floor(take * season.monster.houseTax));
           assert.ok(m.p.monster.rep > 50);
           assert.ok(v.p.inbox[0].text.includes('Wraith'), 'revenge notification');
           stole = true;
@@ -334,14 +339,15 @@ test('house deeds are NFTs: buy, per-wallet cap, entry fees split to owner and b
   const o = env.login('Owner');
   veteran(o.p);
   env.ctx.chain.transfer('liquidity', o.p.wallet, 10000, 'test');
-  const vampireId = Number(Object.values(env.ctx.state.houses).find((h) => h.type === 'vampire').id);
+  const vampireId = Number(Object.values(env.ctx.state.houses).find((h) => h.type === 'vampire' && h.plot).id);
   o.p.unlocked.push('crypt-row');
   env.game.buyDeed(o.token, vampireId);
   const h = env.ctx.state.houses[vampireId];
   assert.equal(env.ctx.chain.state.nfts[h.deed].owner, o.p.wallet);
-  env.game.buyDeed(o.token, 1);
-  env.game.buyDeed(o.token, 2);
-  assert.throws(() => env.game.buyDeed(o.token, 3), /Max 3/);
+  env.game.buyDeed(o.token, 3);
+  env.game.buyDeed(o.token, 4);
+  assert.throws(() => env.game.buyDeed(o.token, 8), /Max 3/);
+  assert.throws(() => env.game.buyDeed(o.token, 1), /Somebody lives here/);
 
   const v = env.login('Visitor');
   veteran(v.p);
@@ -358,16 +364,16 @@ test('behavior dial changes are timelocked and logged publicly', () => {
   const o = env.login('Owner');
   veteran(o.p);
   env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
-  env.game.buyDeed(o.token, 1);
-  env.game.setDial(o.token, 1, 'haunted');
-  const h = env.ctx.state.houses[1];
+  env.game.buyDeed(o.token, 4);
+  env.game.setDial(o.token, 4, 'haunted');
+  const h = env.ctx.state.houses[4];
   assert.equal(h.dial, 'balanced');
   assert.equal(h.log[0].outcome, 'dial');
   env.clock.advance(season.houses.dialTimelockMs + 1);
   env.ctx.tickWorld();
   assert.equal(h.dial, 'haunted');
   const stranger = env.login('Stranger');
-  assert.throws(() => env.game.setDial(stranger.token, 1, 'generous'), /do not own/);
+  assert.throws(() => env.game.setDial(stranger.token, 4, 'generous'), /do not own/);
 });
 
 test('marketplace: escrowed sale pays seller minus fee, fee is part-burned', () => {
@@ -376,27 +382,27 @@ test('marketplace: escrowed sale pays seller minus fee, fee is part-burned', () 
   const b = env.login('Buyer');
   env.ctx.chain.transfer('liquidity', s.p.wallet, 1000, 'test');
   env.ctx.chain.transfer('liquidity', b.p.wallet, 2000, 'test');
-  env.game.buyDeed(s.token, 1);
-  env.game.listHouse(s.token, 1, 1000);
+  env.game.buyDeed(s.token, 4);
+  env.game.listHouse(s.token, 4, 1000);
   const burned = env.ctx.chain.state.supply.burned;
   const sellerBefore = env.ctx.chain.bal(s.p.wallet);
-  env.game.buyListing(b.token, 1);
+  env.game.buyListing(b.token, 4);
   assert.equal(env.ctx.chain.bal(s.p.wallet), sellerBefore + 950);
   assert.equal(env.ctx.chain.state.supply.burned, burned + 25);
-  assert.equal(env.ctx.houseOwner(env.ctx.state.houses[1]).id, b.p.id);
+  assert.equal(env.ctx.houseOwner(env.ctx.state.houses[4]).id, b.p.id);
 });
 
 test('owners earn from the epoch pool by trust-weighted unique visitors, not their own visits', () => {
   const env = setup();
   const o = env.login('Owner');
   env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
-  env.game.buyDeed(o.token, 1);
+  env.game.buyDeed(o.token, 4);
   for (let i = 0; i < 3; i++) {
     o.p.knocks = 40;
-    knock(env, o.token, 1);
+    knock(env, o.token, 4);
   }
-  assert.deepEqual(env.ctx.state.epoch.houses[1] || {}, {}, 'self visits do not count');
-  for (let i = 0; i < 5; i++) knock(env, env.login('V' + i).token, 1);
+  assert.deepEqual(env.ctx.state.epoch.houses[4] || {}, {}, 'self visits do not count');
+  for (let i = 0; i < 5; i++) knock(env, env.login('V' + i).token, 4);
   env.ctx.settleEpoch();
   assert.ok(o.p.claimable > 0);
   const before = env.ctx.chain.bal(o.p.wallet);
@@ -422,8 +428,8 @@ test('reputation reacts to payouts and one visitor cannot max it', () => {
 test('house view carries the public stats card', () => {
   const env = setup();
   const { token } = env.login('Kid');
-  for (let i = 0; i < 6; i++) knock(env, token, 3);
-  const h = env.game.house(3, token);
+  for (let i = 0; i < 6; i++) knock(env, token, 2);
+  const h = env.game.house(2, token);
   for (const k of ['visits', 'candyGiven', 'scared', 'jackpots', 'monsterAttacks']) assert.ok(k in h.totals, k);
   assert.equal(h.totals.visits, 6);
   assert.ok(typeof h.reputation === 'number');
@@ -512,7 +518,7 @@ test('token rewards are trust-gated, capped daily, paid by signed claim from a f
     p.daily.candyEarned = 0;
     const r = knock(env, token, 1);
     boo += r.boo || 0;
-    if (i % 10 === 0) env.game.bank(token);
+    if (i % 10 === 0) env.game.bank(token, BANK);
   }
   assert.ok(boo > 0 && boo <= season.rewards.tokenDailyCap);
   const vaultBefore = env.ctx.chain.bal('vault:claims');
@@ -550,7 +556,7 @@ test('economy report tracks every faucet and sink', () => {
 test('leaderboards: all categories, with level divisions', () => {
   const env = setup();
   const { token } = env.login('Leader');
-  for (let i = 0; i < 6; i++) knock(env, token, i + 1);
+  for (const id of [1, 2, 5, 6, 7, 9]) knock(env, token, id);
   const lb = env.game.leaderboards();
   for (const k of ['candy', 'houses', 'monstersDefeated', 'playersScared', 'candyStolen', 'valuableHouses', 'legendaries', 'richest', 'richestMonster', 'notorious', 'famousHouses']) assert.ok(lb[k], k);
   assert.equal(lb.candy.rows[0].name, 'Leader');
@@ -567,4 +573,60 @@ test('Zombie November reskins the season through data alone', () => {
   const { token } = env.login('Survivor');
   knock(env, token, 1);
   assert.equal(env.game.world(token).season.name, 'Zombie November');
+});
+
+// ---------------- 3D world: lots, the Candy Bank, travel ----------------
+
+test('layout: every house has a position and a door; lots match the season plots', () => {
+  const L = buildLayout(season);
+  const env = setup();
+  for (const h of Object.values(env.ctx.state.houses)) {
+    assert.ok(L.houses[h.id], `house ${h.id} placed`);
+    assert.equal(!!L.houses[h.id].plot, !!h.plot);
+  }
+  assert.deepEqual(Object.values(env.ctx.state.houses).filter((h) => h.plot && h.neighborhood === 'hollow-lane').map((h) => h.id), PLOTS);
+  // Houses don't overlap.
+  const hs = Object.values(L.houses);
+  for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) assert.ok(Math.hypot(hs[i].x - hs[j].x, hs[i].z - hs[j].z) > 10);
+});
+
+test('empty lots cannot be knocked until someone buys them; NPC homes are not for sale', () => {
+  const env = setup();
+  const { token } = env.login('Kid');
+  env.clock.advance(1000);
+  assert.throws(() => env.game.knock(token, 4, { holdMs: 100 }), /Nobody lives here/);
+  assert.equal(env.game.house(4, token).forSale, true);
+  assert.equal(env.game.house(1, token).forSale, false);
+  assert.ok(!env.game.world(token).route.some((id) => PLOTS.includes(id)));
+  const o = env.login('Owner');
+  env.ctx.chain.transfer('liquidity', o.p.wallet, 1000, 'test');
+  env.game.buyDeed(o.token, 4);
+  env.clock.advance(1000);
+  env.game.knock(token, 4, { holdMs: 100 });
+});
+
+test('the Candy Bank only works when you are standing at it', () => {
+  const env = setup();
+  const { token, p } = env.login('Kid');
+  p.bag = 50;
+  assert.throws(() => env.game.bank(token, { x: 0, z: 40 }), /Walk to the Candy Bank/);
+  assert.throws(() => env.game.bank(token), /Walk to the Candy Bank/);
+  assert.equal(env.game.bank(token, { x: BANK.x + 1, z: BANK.z }).banked, 50);
+});
+
+test('anti-teleport: actions farther apart than a player can run are rejected', () => {
+  const env = setup({ realTravel: true });
+  const { token, p } = env.login('Runner');
+  const L = buildLayout(season);
+  const far = L.houses[19].door; // far end of Hollow Lane
+  const dist = Math.hypot(far.x - L.spawn.x, far.z - L.spawn.z);
+  env.clock.advance(500);
+  assert.throws(() => env.game.knock(token, 19, { holdMs: 100 }), /that fast/);
+  assert.ok(p.trust < season.trust.start);
+  env.clock.advance((dist / season.travel.maxSpeed) * 1000);
+  env.game.knock(token, 19, { holdMs: 100 });
+  p.bag = 10;
+  p.pending = null;
+  env.clock.advance(1000);
+  assert.throws(() => env.game.bank(token, BANK), /that fast/);
 });

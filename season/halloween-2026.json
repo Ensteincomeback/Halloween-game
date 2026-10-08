@@ -43,6 +43,13 @@
 
   "pity": { "rareOrBetterWithin": 40 },
 
+  "travel": {
+    "_comment": "Players walk the 3D world. The server rejects actions that would need faster-than-running travel since the last one (anti-teleport).",
+    "maxSpeed": 14,
+    "graceMs": 2000,
+    "bankRadius": 6
+  },
+
   "energy": { "dailyFree": 30, "regenMinutes": 20, "regenCap": 30, "hardCap": 45 },
 
   "player": {
@@ -120,19 +127,20 @@
 
   "streak": { "baseBonus": 10, "perDay": 5, "maxDays": 7 },
 
+  "_neighborhoods": "plots = indexes of empty houses: NFT lots players can buy. Every other house is an NPC home.",
   "neighborhoods": [
-    { "id": "hollow-lane", "name": "Hollow Lane", "minLevel": 1, "unlockCost": 0, "candyMultiplier": 1,
+    { "id": "hollow-lane", "name": "Hollow Lane", "minLevel": 1, "unlockCost": 0, "candyMultiplier": 1, "plots": [2, 3, 7, 12, 19],
       "types": ["normal", "normal", "pumpkin", "haunted", "normal", "witch", "normal", "graveyard", "normal", "zombie",
                 "normal", "pumpkin", "witch", "normal", "haunted", "graveyard", "normal", "zombie", "normal", "normal"],
       "names": ["The Hendersons", "Blue Shutters", "Old Gourd Patch", "Ashgrove Manor", "The Pattersons", "Crooked Chimney",
                 "Maple Duplex", "Old Chapel Yard", "Yellow Door", "Rotting Cottage", "The Okafors", "Sunny Pumpkins",
                 "Bramble Hollow", "The Nguyens", "Wailing Villa", "Mosswick Plot", "The Garcias", "Groaning Bungalow",
                 "White Picket", "Last House on the Lane"] },
-    { "id": "crypt-row", "name": "Crypt Row", "minLevel": 4, "unlockCost": 150, "candyMultiplier": 1.5, "mods": { "ambush": 2, "scare": 2, "candy": -4 },
+    { "id": "crypt-row", "name": "Crypt Row", "minLevel": 4, "unlockCost": 150, "candyMultiplier": 1.5, "plots": [1, 4, 10], "mods": { "ambush": 2, "scare": 2, "candy": -4 },
       "types": ["haunted", "vampire", "graveyard", "zombie", "mansion", "witch", "graveyard", "vampire", "haunted", "zombie", "lab", "mansion"],
       "names": ["Blackwood Hall", "Castle Nocturne", "Lantern Graves", "The Shamblers", "Hemlock Estate", "Cauldron Cabin",
                 "Elmwood Cemetery", "Crimson Keep", "Vesper House", "Bonepile Place", "Dr. Grimm's Annex", "Raven's Rest"] },
-    { "id": "witchwood", "name": "Witchwood Heights", "minLevel": 8, "unlockCost": 400, "candyMultiplier": 2, "mods": { "ambush": 3, "scare": 3, "legendary": 0.5, "candy": -6.5 },
+    { "id": "witchwood", "name": "Witchwood Heights", "minLevel": 8, "unlockCost": 400, "candyMultiplier": 2, "plots": [0, 2, 9], "mods": { "ambush": 3, "scare": 3, "legendary": 0.5, "candy": -6.5 },
       "types": ["mansion", "lab", "vampire", "witch", "haunted", "mansion", "graveyard", "lab", "vampire", "pumpkin"],
       "names": ["Thornfield Manor", "Laboratory 13", "Count's Summer Home", "Coven Cottage", "The Screaming House",
                 "Gravesend Hall", "Saint Morrow's Yard", "Voltage Tower", "Duskmere Castle", "The Great Pumpkin Farm"] }

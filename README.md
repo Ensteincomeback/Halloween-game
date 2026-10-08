@@ -22,6 +22,35 @@ Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DA
 > claims and anchors. It has the same shape as the Solana programs the game needs, so it
 > can be swapped for a real client. $BOO here is test currency, from a once-a-day devnet faucet.
 
+## The 3D world
+
+The game is a third-person 3D neighborhood built with [three.js](https://threejs.org)
+(vendored in `public/vendor`, MIT). The art is built from the hand-made low-poly models in
+`public/models`: **Ghost Kid** and **Witch Kid** (player characters), **Haunted Mansion**
+and **Witch Hut** (houses), and the **Knock street map**, which supplies the trees, tombstones,
+street lamps and floating ghost (`props.glb`) and sets the palette.
+
+- **Controls**: `WASD`/arrows to walk, `Shift` to run, drag to look, wheel to zoom, and
+  **hold & release `E`** at a door to knock. `Tab` opens the menu. On phones: touch joystick,
+  drag to look, and the action button.
+- **Your character** is an animated kid model in your costume. The jack-o'-lantern bucket
+  fills with candy as your bag does. Every costume (ghost, witch, mummy, werewolf, vampire,
+  hunter, skeleton, headless horseman, pumpkin king, banshee, hazmat) is one of the kid models
+  recolored, plus extra pieces.
+- **Neighborhoods**: Hollow Lane (north), Crypt Row (east) and Witchwood Heights (west) branch
+  off a town square. Locked neighborhoods have iron gates, and secret houses sit behind hedges
+  at the end of each street.
+- **NPC homes vs. empty lots**: most houses are NPC homes you knock on. Scattered among them
+  are **empty houses**: dark, boarded up, with a FOR SALE sign. These are the NFT deeds players
+  can buy. Once bought they light up, carry the owner's sign, and can be knocked on.
+- **The Candy Bank** is a building in the town square. To keep your candy safe you have to
+  carry your bucket there and deposit it; there is no bank button.
+- **Tells are visible**: flickering or flashing windows, a warm porch light, caramel steam
+  from the chimney, a jack-o'-lantern on the step, rustling bushes, claw marks on the door.
+- **Anti-teleport**: the server knows where every door and the bank are
+  (`server/layout.js`, shared with the client). It rejects any knock or deposit that would
+  need faster-than-running travel since the player's last action.
+
 ## The game
 
 ### Trick-or-Treaters (everyone)
@@ -29,8 +58,8 @@ Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DA
 - **10 outcomes**: candy, big candy, rare candy, monster card, $BOO, legendary
   (with a rate-limited Golden Pumpkin jackpot), secret-house discovery, trick, scare
   mini-game, and monster attack.
-- **Bag vs. stash**: only bag candy is at risk. Walk home to bank it (this also resets
-  **Nightfall**, the danger level that rises the longer you stay out).
+- **Bucket vs. bank**: only candy in your bucket is at risk. Walk it to the Candy Bank to
+  deposit it (this also resets **Nightfall**, the danger level that rises the longer you stay out).
 - **Tells** on every house (flickering lights, claw marks on the gate) hint at its hidden
   daily mood and are honest 75% of the time.
 - **Stats** (Courage, Sneak, Luck) come from training (with escalating cost and a cap),
@@ -66,6 +95,8 @@ Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DA
 - **10 types**: Normal, Pumpkin Farm, Haunted House, Witch Hut, Zombie House, Graveyard,
   Vampire Castle, Abandoned Mansion, Secret Laboratory and Legendary Mansion (secret, not
   for sale). Each type shifts the odds table within protocol caps.
+- **Only empty lots are for sale** (11 across the three neighborhoods, set per season in
+  `plots`). NPC homes can be knocked on but never bought.
 - **Deeds are NFTs**, bought with $BOO and capped at 3 per wallet, and traded on an escrow
   marketplace (5% fee, half burned).
 - **Public stats card**: visits, candy given, players scared, jackpots, monster attacks,
@@ -156,7 +187,9 @@ Nightfall all shift these numbers, within protocol caps.
 ## Architecture
 
 ```
-public/            Vanilla JS client (renders state, captures input; no game logic)
+public/js/         3D client: world3d (scene), character (kid models), input, assets, main
+public/models/     Hand-made GLB models (kids, houses, street props)
+public/vendor/     three.js + GLTFLoader (MIT)
 server/index.js    HTTP API + static files
 server/game.js     Wires the modules; views, leaderboards, public API
 server/core.js     Players, energy, candy flow, trust, feed
@@ -166,6 +199,7 @@ server/monsters.js License, Fright, lairs, monster results, bounties
 server/economy.js  Shop, training, raffle, cards, prizes, claims, missions
 server/chain.js    Simulated chain: token, NFTs, stake, escrow, signed claims, anchors
 server/config.js   Season Pack loader (extends + merge)
+server/layout.js   World layout (house, door, bank positions), shared with the client
 season/            Season Packs
 test/              Rule tests with a deterministic clock and RNG
 ```

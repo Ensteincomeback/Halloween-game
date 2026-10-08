@@ -18,7 +18,7 @@ const season = loadSeason(seasonFile);
 const store = createStore(dataFile);
 const game = createGame({ season, state: store.state, onChange: store.changed });
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const publicDir = path.join(root, 'public');
 
 function readBody(req) {
@@ -70,7 +70,7 @@ const routes = {
   'POST /api/knock': (t, b) => game.knock(t, b.houseId, b.gesture),
   'POST /api/scare': (t, b) => game.resolveScare(t, b.id),
   'POST /api/ambush': (t, b) => game.resolveAmbush(t, b.id, b.counter, b.bribe),
-  'POST /api/bank': (t) => game.bank(t),
+  'POST /api/bank': (t, b) => game.bank(t, b.pos),
   'POST /api/buy': (t, b) => game.buy(t, b.kind, b.itemId),
   'POST /api/equip': (t, b) => game.equip(t, b.costumeId),
   'POST /api/train': (t, b) => game.train(t, b.stat),

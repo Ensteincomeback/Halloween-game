@@ -1,7 +1,7 @@
 {
   "name": "knock",
   "version": "0.1.0",
-  "description": "Knock: a trick-or-treat game. Season 0 off-chain MVP.",
+  "description": "Knock: a 3D trick-or-treat game. Knock on doors, collect candy, survive monsters.",
   "type": "module",
   "private": true,
   "engines": { "node": ">=20" },

@@ -57,6 +57,7 @@ export function installKnock(ctx) {
       return eventOpen && !(p.discovered[h.id] > 0) ? season.legendaryEvent.entryFee : 0;
     }
     if (!p.unlocked.includes(h.neighborhood)) throw new GameError(`${ctx.hood(h.neighborhood).name} is locked. Unlock it in the shop.`, 403);
+    if (!ctx.knockable(h)) throw new GameError(`Nobody lives here. This empty ${season.houseTypes[h.type].name} is for sale.`, 403);
     return season.houseTypes[h.type].entryFee || 0;
   }
 
@@ -67,7 +68,9 @@ export function installKnock(ctx) {
     if (p.knocks < 1) throw new GameError('Out of knocks. The street is quiet... come back later.', 429);
     const fee = canVisit(p, h);
     if (fee && p.stash + p.bag < fee) throw new GameError(`Entry costs ${fee} candy`);
+    ctx.checkTravel(p, ctx.layout.houses[h.id].door);
     ctx.checkGesture(p, gesture);
+    ctx.arrive(p, ctx.layout.houses[h.id].door);
     ctx.chargeEntry(p, h, fee);
 
     p.knocks -= 1;

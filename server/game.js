@@ -9,6 +9,7 @@ import { installMonsters } from './monsters.js';
 import { installEconomy } from './economy.js';
 import { createChain } from './chain.js';
 import { seasonHash } from './config.js';
+import { buildLayout } from './layout.js';
 
 export { GameError, buildOdds, rollOutcome, OUTCOMES };
 
@@ -17,7 +18,8 @@ const DIVISIONS = { all: [1, Infinity], novice: [1, 4], regular: [5, 9], veteran
 export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {} }) {
   state.serverSecret ??= crypto.randomBytes(32).toString('hex');
   const chain = createChain({ state, token: season.token, now, secret: state.serverSecret });
-  const ctx = { season, state, now, rng, chain, changed: onChange };
+  const layout = buildLayout(season);
+  const ctx = { season, state, now, rng, chain, changed: onChange, layout };
 
   installCore(ctx);
   installKnock(ctx);
@@ -106,6 +108,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       cards: season.cards.list, cardRules: { craftCost: season.cards.craftCost, craftDuplicates: season.cards.craftDuplicates },
       odds: strip(season.odds), houseTypes: season.houseTypes, dial: season.houses.dial,
       raffle: season.raffle, trophies: season.trophies,
+      layout, travel: season.travel,
     };
   }
 
@@ -138,9 +141,9 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
   function leaderboards(division = 'all') {
     const out = {};
     for (const [k, B] of Object.entries(BOARDS)) out[k] = { title: B.title, rows: rank(k, division).slice(0, 10).map(({ id, ...r }) => r) };
-    const houses = Object.values(state.houses).filter((h) => !h.secret);
+    const houses = Object.values(state.houses).filter((h) => !h.secret && ctx.knockable(h));
     const houseRow = (h, value) => ({ id: h.id, name: h.name, icon: season.houseTypes[h.type].icon, owner: ctx.houseOwner(h)?.name || null, value });
-    out.valuableHouses = { title: 'Most Valuable House', rows: houses.map((h) => houseRow(h, ctx.houseValue(h))).sort((a, b) => b.value - a.value).slice(0, 10) };
+    out.valuableHouses = { title: 'Most Valuable House', rows: houses.filter((h) => h.plot).map((h) => houseRow(h, ctx.houseValue(h))).sort((a, b) => b.value - a.value).slice(0, 10) };
     out.famousHouses = {
       title: 'Most Famous House',
       rows: houses.filter((h) => h.totals.visits).map((h) => houseRow(h, Math.round(ctx.reputation(h) * Math.log10(h.totals.visits + 10)))).sort((a, b) => b.value - a.value).slice(0, 10),
@@ -169,7 +172,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     knock: withPlayer((p, houseId, gesture) => ({ result: ctx.knock(p, Number(houseId), gesture) })),
     resolveScare: withPlayer((p, id) => ({ result: ctx.resolveScare(p, id) })),
     resolveAmbush: withPlayer((p, id, counter, bribe) => ({ result: ctx.resolveAmbush(p, id, counter, !!bribe) })),
-    bank: withPlayer((p) => ctx.bank(p)),
+    bank: withPlayer((p, pos) => ctx.bank(p, pos)),
     buy: withPlayer((p, kind, itemId) => ctx.buy(p, kind, itemId)),
     equip: withPlayer((p, id) => ctx.equip(p, id)),
     train: withPlayer((p, stat) => ctx.train(p, stat)),
