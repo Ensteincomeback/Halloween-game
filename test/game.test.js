@@ -437,17 +437,27 @@ test('house view carries the public stats card', () => {
 
 // ---------------- neighborhoods, secrets, events ----------------
 
-test('neighborhoods unlock by level and candy', () => {
+test('gatekeepers: free at the right level, or a one-time bribe; you must be at the gate', () => {
   const env = setup();
+  const L = buildLayout(season);
+  const keeper = L.keepers.find((k) => k.hood === 'crypt-row');
   const { token, p } = env.login('Kid');
   const cryptHouse = Object.values(env.ctx.state.houses).find((h) => h.neighborhood === 'crypt-row').id;
   env.clock.advance(1000);
   assert.throws(() => env.game.knock(token, cryptHouse, { holdMs: 100 }), /locked/);
-  assert.throws(() => env.game.unlock(token, 'crypt-row'), /level/);
-  veteran(p);
+  assert.throws(() => env.game.unlock(token, 'crypt-row', { x: 0, z: 0 }), /gatekeeper/);
+  assert.throws(() => env.game.unlock(token, 'crypt-row', keeper.spot), /Not enough candy/);
   p.stash = 200;
-  env.game.unlock(token, 'crypt-row');
-  assert.equal(p.stash, 50);
+  const r = env.game.unlock(token, 'crypt-row', keeper.spot);
+  assert.equal(r.bribed, true);
+  assert.equal(p.stash, 200 - season.neighborhoods[1].unlockCost);
+  assert.throws(() => env.game.unlock(token, 'crypt-row', keeper.spot), /already knows you/);
+  // A high-level player walks in for free.
+  const vet = env.login('Vet');
+  veteran(vet.p);
+  vet.p.stash = 0;
+  const w = L.keepers.find((k) => k.hood === 'witchwood');
+  assert.equal(env.game.unlock(vet.token, 'witchwood', w.spot).bribed, false);
 });
 
 test('secret houses are hidden until discovered, and the Legendary Mansion opens for one hour', () => {
@@ -629,4 +639,37 @@ test('anti-teleport: actions farther apart than a player can run are rejected', 
   p.pending = null;
   env.clock.advance(1000);
   assert.throws(() => env.game.bank(token, BANK), /that fast/);
+});
+
+// ---------------- dev build ----------------
+
+test('dev build: shortcuts exist only in dev mode and skip the grind', () => {
+  assert.equal(setup().game.dev, null);
+  let t = Date.parse('2026-10-08T18:00:00Z');
+  const game = createGame({ season: deepMerge(season, { travel: { maxSpeed: 1e9 } }), state: {}, now: () => t, rng: prng(4), dev: true });
+  const { token } = game.login('Dev', '7.7.7.7');
+  const ctx = game._ctx;
+  const p = ctx.state.players[ctx.state.tokens[token]];
+  game.dev.candy(token, 50000);
+  assert.ok(p.stash >= 50000);
+  game.dev.monster(token, 'witch');
+  assert.equal(p.monster.type, 'witch');
+  assert.equal(ctx.licenseStatus(p).active, true);
+  game.dev.force(token, 'jackpot');
+  t += 1000;
+  const r = game.knock(token, 1, { holdMs: 100 }).result;
+  assert.equal(r.jackpot, true);
+  game.dev.force(token, 'ambush');
+  t += 1000;
+  assert.ok(game.knock(token, 2, { holdMs: 100 }).result.ambush);
+  game.dev.unlockAll(token);
+  assert.equal(p.unlocked.length, season.neighborhoods.length);
+  // A rival monster lair always springs on you.
+  const v = game.login('Victim', '8.8.8.8');
+  const vp = ctx.state.players[ctx.state.tokens[v.token]];
+  game.dev.rival(v.token, 5, 'trap');
+  vp.bag = 50;
+  t += 1000;
+  const tr = game.knock(v.token, 5, { holdMs: 100 }).result;
+  assert.equal(tr.outcome, 'trap');
 });

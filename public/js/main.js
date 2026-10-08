@@ -1,11 +1,13 @@
-// Knock 3D client. All randomness and rules live on the server; this file
-// renders the world, moves the player's character and captures input.
+// Knock client: a top-down pixel-art neighborhood. All randomness and rules
+// live on the server; this file draws the world, moves your trick-or-treater
+// and handles menus, the tutorial, help and (in dev builds) the dev panel.
 
-import * as THREE from 'three';
-import { createWorld } from './world3d.js';
-import { createCharacter } from './character.js';
+import { createWorld } from './pixel/world2d.js';
+import { createActor } from './pixel/actor.js';
+import { kidFrame } from './pixel/sprites.js';
 import { createInput } from './input.js';
-import { loadAssets } from './assets.js';
+import { helpHtml } from './ui/help.js';
+import { createDevPanel } from './ui/dev.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -13,11 +15,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const S = {
   token: localStorage.getItem('knock.token'),
   player: null, world: null, catalog: null,
-  hood: null, selected: null, houseDetail: null,
+  selected: null, houseDetail: null,
   tab: 'porch', division: 'all', busy: false, seenInbox: 0, timers: false,
-  gfx: null, near: null, actionDownAt: 0, drawer: false,
+  gfx: null, near: null, actionDownAt: 0, drawer: false, tut: null,
 };
-
 window.__knock = S; // handy for debugging and browser tests
 
 const ICON = { candy: '🍬', bigCandy: '🍫', rare: '🍭', collectible: '🃏', token: '🪙', legendary: '👑', jackpot: '🎃', secretHouse: '🗝️', trick: '🐕', scare: '👻', ambush: '🧟', trap: '🪤', dial: '🎛️', sold: '🏷️' };
@@ -50,59 +51,120 @@ function toast(msg, ms = 2800) {
   toast.timer = setTimeout(() => (t.hidden = true), ms);
 }
 
-// ---------- boot ----------
+// ---------- start menu ----------
+
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const fakeSolanaAddress = () => Array.from({ length: 44 }, () => B58[Math.floor(Math.random() * B58.length)]).join('');
+const shortAddr = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 async function boot() {
   S.catalog = await api('catalog');
-  if (!S.token) return showLogin();
-  try {
-    await api('me');
-    await startGame();
-  } catch {
-    showLogin();
+  if (S.catalog.dev) document.body.classList.add('dev-build');
+  if (S.token) {
+    try {
+      await api('me');
+    } catch {
+      S.token = null;
+    }
   }
+  showStart();
 }
 
-function showLogin() {
-  $('#login').hidden = false;
+function showStart() {
+  $('#start').hidden = false;
   $('#game').hidden = true;
+  const known = S.token && S.player;
+  $('#start-name').value = known ? S.player.name : localStorage.getItem('knock.name') || '';
+  $('#start-name').disabled = !!known;
+  $('#start-returning').hidden = !known;
+  $('#start-returning-name').textContent = known ? `Level ${S.player.level} · ${S.catalog.costumes[S.player.costume].name}` : '';
+  $('#btn-play').textContent = known ? '▶ Continue' : '▶ Play';
+  renderWallet();
+  animatePreview();
 }
 
-function logout() {
-  localStorage.removeItem('knock.token');
-  S.token = null;
-  showLogin();
+function animatePreview() {
+  const cv = $('#start-preview');
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const costumes = ['sheet', 'witch', 'vampire', 'pumpkinking', 'werewolf', 'skeleton'];
+  let t = 0;
+  clearInterval(animatePreview.timer);
+  animatePreview.timer = setInterval(() => {
+    if ($('#start').hidden) return clearInterval(animatePreview.timer);
+    t += 1;
+    const costume = S.player ? S.player.costume : costumes[Math.floor(t / 12) % costumes.length];
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.drawImage(kidFrame(costume, 0, t % 2 ? 1 : 2, 0.6), 0, 0, cv.width, cv.height);
+  }, 260);
 }
 
-$('#login-form').addEventListener('submit', async (e) => {
+function renderWallet() {
+  const addr = localStorage.getItem('knock.solana');
+  $('#wallet-connected').hidden = !addr;
+  $('#btn-wallet').hidden = !!addr;
+  if (addr) $('#wallet-addr').textContent = shortAddr(addr);
+}
+
+$('#btn-wallet').addEventListener('click', () => {
+  showModal(`<h2>Connect a Solana wallet</h2>
+    <p class="muted small">Preview only: nothing is signed or sent yet. Play never needs a wallet.</p>
+    <div class="list">${['Phantom', 'Solflare', 'Backpack'].map((w) => `<button class="btn wallet-choice" data-wallet="${w}">◎ ${w}</button>`).join('')}</div>
+    <div class="actions"><button class="btn" data-close>Cancel</button></div>`);
+  document.querySelectorAll('[data-wallet]').forEach((b) => b.addEventListener('click', () => {
+    localStorage.setItem('knock.solana', fakeSolanaAddress());
+    localStorage.setItem('knock.solanaWallet', b.dataset.wallet);
+    closeModal();
+    renderWallet();
+    toast(`${b.dataset.wallet} connected (preview)`);
+  }));
+});
+$('#btn-wallet-disconnect').addEventListener('click', () => {
+  localStorage.removeItem('knock.solana');
+  renderWallet();
+});
+$('#btn-new-character').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Start a new character? Your current one stays tied to its own login.')) return;
+  logout(false);
+  showStart();
+});
+$('#btn-start-help').addEventListener('click', () => showHelp());
+
+$('#start-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
-    const { token, player } = await api('login', { name: $('#login-name').value });
-    S.token = token;
-    localStorage.setItem('knock.token', token);
+    if (!S.token) {
+      const name = $('#start-name').value.trim();
+      if (!name) return toast('Pick a name for your trick-or-treater');
+      localStorage.setItem('knock.name', name);
+      const { token } = await api('login', { name });
+      S.token = token;
+      localStorage.setItem('knock.token', token);
+    }
+    $('#start').hidden = true;
     await startGame();
-    const costume = S.catalog.costumes[player.costume];
-    showModal(`
-      <div class="big-icon">${costume.icon}</div>
-      <h2>Welcome to the neighborhood, ${esc(player.name)}!</h2>
-      <p>You're a kid in a ${esc(costume.name)} costume with an empty bag and a curfew.</p>
-      <p class="small"><kbd>W A S D</kbd> to walk, <kbd>Shift</kbd> to run, drag to look around.<br>
-        Walk up to a door and <b>hold &amp; release <kbd>E</kbd></b> to knock. On a phone: joystick + the action button.</p>
-      <p class="muted small">Candy in your <b>bucket</b> can be stolen. Carry it to the <b>Candy Bank</b> in the town square to keep it safe.
-        Dark houses with FOR SALE signs are empty: they can be bought. <kbd>Tab</kbd> opens the menu.</p>
-      <div class="actions"><button class="btn primary big" data-close>Let's go</button></div>`);
+    if (localStorage.getItem('knock.tutorial') !== 'done') startTutorial();
   } catch (err) {
     toast(err.message);
   }
 });
 
+function logout(show = true) {
+  localStorage.removeItem('knock.token');
+  localStorage.removeItem('knock.pos');
+  S.token = null;
+  S.player = null;
+  if (show) showStart();
+}
+
 async function startGame() {
-  $('#login').hidden = true;
   $('#game').hidden = false;
   S.seenInbox = S.player.inbox[0]?.at || 0;
   S.wasDeep = S.player.deepEconomy;
   await refreshWorld();
-  if (!S.gfx) await init3D();
+  if (!S.gfx) init2D();
+  else S.gfx.world.sync(S.world);
   S.selected ??= S.world.route[0] || 1;
   S.houseDetail = await api(`house/${S.selected}`);
   renderAll();
@@ -114,101 +176,79 @@ async function startGame() {
   }
 }
 
-// ---------- 3D ----------
+// ---------- the 2D world ----------
 
-const RUN_SPEED = 6.5;
-const WALK_SPEED = 3.4;
-const REACH = 2.6;
+const RUN_SPEED = 7;
+const WALK_SPEED = 4;
+const REACH = 2.1;
 
-async function init3D() {
-  const loading = $('#loading');
-  loading.hidden = false;
-  const assets = await loadAssets((f) => ($('#loading-bar').style.width = `${Math.round(f * 100)}%`));
-  loading.hidden = true;
-  const world = createWorld($('#stage'), S.catalog, assets);
+function init2D() {
+  const world = createWorld($('#stage'), S.catalog);
   world.sync(S.world);
-  const hero = createCharacter(assets, S.player.costume);
-  world.scene.add(hero.root);
+  const hero = createActor(S.player.costume);
   const L = S.catalog.layout;
-  const pos = hero.root.position;
-  pos.set(L.spawn.x, 0, L.spawn.z);
+  const pos = { x: L.spawn.x, z: L.spawn.z };
   try {
     const saved = JSON.parse(localStorage.getItem('knock.pos') || 'null');
-    if (saved && !world.blocked(saved.x, saved.z)) pos.set(saved.x, 0, saved.z);
+    if (saved && !world.blocked(saved.x, saved.z)) Object.assign(pos, saved);
   } catch {}
-  const input = createInput(world.renderer.domElement, { onActionDown, onActionUp, onMenu: () => toggleDrawer() });
-  S.gfx = { world, hero, input, clock: new THREE.Clock(), facing: Math.PI, camPos: new THREE.Vector3(), lastSave: 0, lastMap: 0 };
+  const input = createInput($('#stage'), {
+    onActionDown, onActionUp,
+    onMenu: () => toggleDrawer(),
+    onHelp: () => showHelp(),
+    onDev: () => S.dev?.toggle(),
+  });
+  S.gfx = { world, hero, input, pos, last: performance.now(), lastSave: 0, lastMap: 0 };
+  if (S.catalog.dev) S.dev = createDevPanel({ api, S, toast, teleport, refresh: reloadHouse, startTutorial, layout: L });
   requestAnimationFrame(loop);
 }
 
 const modalOpen = () => !$('#modal').hidden;
 
-function loop() {
+function loop(now) {
   requestAnimationFrame(loop);
   const g = S.gfx;
-  const dt = Math.min(0.1, g.clock.getDelta());
-  const pos = g.hero.root.position;
-  const m = modalOpen() ? { x: 0, y: 0, run: false } : g.input.movement();
-  const { yaw, pitch, dist } = g.input.state;
-  const fx = -Math.sin(yaw);
-  const fz = -Math.cos(yaw);
-  const vx = fx * m.y - fz * m.x;
-  const vz = fz * m.y + fx * m.x;
-  const amount = Math.min(1, Math.hypot(m.x, m.y));
+  const dt = Math.min(0.1, (now - g.last) / 1000);
+  g.last = now;
+  const m = modalOpen() ? { x: 0, z: 0, run: false } : g.input.movement();
+  const amount = Math.min(1, Math.hypot(m.x, m.z));
   const speed = (m.run ? RUN_SPEED : WALK_SPEED) * amount;
-  const before = { x: pos.x, z: pos.z };
+  const before = { x: g.pos.x, z: g.pos.z };
   if (amount > 0.05) {
-    const len = Math.hypot(vx, vz) || 1;
-    g.world.move(pos, (vx / len) * speed * dt, (vz / len) * speed * dt);
-    const target = Math.atan2(vx, vz);
-    let diff = target - g.facing;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    g.facing += diff * Math.min(1, dt * 12);
+    const len = Math.hypot(m.x, m.z);
+    g.world.move(g.pos, (m.x / len) * speed * dt, (m.z / len) * speed * dt);
   }
-  g.hero.root.rotation.y = g.facing;
-  const moved = Math.hypot(pos.x - before.x, pos.z - before.z) / (dt || 1);
-  g.hero.update(dt, moved);
-
-  // third-person camera
-  // Pull the camera in if a building is between it and the player.
-  let camDist = dist;
-  for (let k = 0.15; k <= 1.0001; k += 0.05) {
-    if (g.world.solidAt(pos.x + Math.sin(yaw) * Math.cos(pitch) * dist * k, pos.z + Math.cos(yaw) * Math.cos(pitch) * dist * k)) {
-      camDist = Math.max(1.2, dist * (k - 0.1));
-      break;
-    }
+  const step = Math.hypot(g.pos.x - before.x, g.pos.z - before.z);
+  g.hero.update(dt, dt ? step / dt : 0, m.x, m.z);
+  if (S.tut) tutorialMoved(step);
+  g.world.render(dt, g.pos, g.hero, { bank: true });
+  updateNearby(g.pos);
+  if (now - g.lastMap > 150) {
+    g.lastMap = now;
+    drawMinimap(g.pos);
   }
-  const lift = (dist - camDist) * 0.5; // look down from above when squeezed
-  const want = new THREE.Vector3(pos.x + Math.sin(yaw) * Math.cos(pitch) * camDist, 1.0 + Math.sin(pitch) * camDist + lift, pos.z + Math.cos(yaw) * Math.cos(pitch) * camDist);
-  g.camPos.lerp(want, g.camPos.lengthSq() ? Math.min(1, dt * 8) : 1);
-  g.world.camera.position.copy(g.camPos);
-  g.world.camera.lookAt(pos.x, pos.y + 1.0, pos.z);
-
-  g.world.animate(dt, pos);
-  updateNearby(pos);
-  const t = performance.now();
-  if (t - g.lastMap > 120) {
-    g.lastMap = t;
-    drawMinimap(pos);
-  }
-  if (t - g.lastSave > 2000) {
-    g.lastSave = t;
+  if (now - g.lastSave > 2000) {
+    g.lastSave = now;
     try {
-      localStorage.setItem('knock.pos', JSON.stringify({ x: pos.x, z: pos.z }));
+      localStorage.setItem('knock.pos', JSON.stringify(g.pos));
     } catch {}
   }
-  g.world.renderer.render(g.world.scene, g.world.camera);
+}
+
+function teleport(x, z) {
+  Object.assign(S.gfx.pos, { x, z });
 }
 
 // What can the player interact with right now?
 function updateNearby(pos) {
   const L = S.catalog.layout;
   let best = null;
-  const consider = (kind, id, door) => {
-    const d = Math.hypot(door.x - pos.x, door.z - pos.z);
+  const consider = (kind, id, spot) => {
+    const d = Math.hypot(spot.x - pos.x, spot.z - pos.z);
     if (d < REACH && (!best || d < best.d)) best = { kind, id, d };
   };
   consider('bank', 'bank', L.bank.door);
+  for (const k of L.keepers) consider('keeper', k.hood, k.spot);
   for (const h of S.world.houses) if (L.houses[h.id]) consider('house', h.id, L.houses[h.id].door);
   const key = best ? `${best.kind}:${best.id}` : null;
   if (key !== S.nearKey || S.actionDownAt) {
@@ -216,6 +256,7 @@ function updateNearby(pos) {
     S.near = best;
     renderPrompt();
   }
+  if (S.tut?.step === 'gate' && L.keepers.some((k) => Math.hypot(k.x - pos.x, k.z - pos.z) < 4)) tutorialEvent('keeper');
 }
 
 function renderPrompt() {
@@ -232,6 +273,12 @@ function renderPrompt() {
   if (n.kind === 'bank') {
     el.innerHTML = `<kbd>E</kbd> Deposit <b>${S.player.bag} 🍬</b> at the Candy Bank`;
     btn.textContent = '🏦 Deposit';
+    return;
+  }
+  if (n.kind === 'keeper') {
+    const hood = S.world.neighborhoods.find((x) => x.id === n.id);
+    el.innerHTML = `<kbd>E</kbd> Talk to the Gatekeeper of <b>${esc(hood.name)}</b>${hood.unlocked ? ' · <span class="ok-text">you may pass</span>' : ''}`;
+    btn.textContent = '💬 Talk';
     return;
   }
   const h = S.world.houses.find((x) => x.id === n.id);
@@ -263,16 +310,141 @@ async function onActionUp() {
   renderPrompt();
   if (!n) return;
   if (n.kind === 'bank') return doBank();
+  if (n.kind === 'keeper') return talkToKeeper(n.id);
   const h = S.world.houses.find((x) => x.id === n.id);
   if (h?.forSale) return selectHouse(h.id, { open: true });
   S.selected = n.id;
   doKnock(holdMs);
 }
 
+// ---------- gatekeepers ----------
+
+function talkToKeeper(hoodId) {
+  const hood = S.world.neighborhoods.find((x) => x.id === hoodId);
+  const p = S.player;
+  const total = p.bag + p.stash;
+  let body;
+  if (hood.unlocked) body = `<p>"Ah, you again. Go on through, little one."</p><div class="actions"><button class="btn primary" data-close>Thanks!</button></div>`;
+  else if (p.level >= hood.minLevel) body = `<p>"You look brave enough for ${esc(hood.name)}. In you go."</p>
+      <div class="actions"><button class="btn primary" id="btn-keeper-enter">Enter ${esc(hood.name)}</button><button class="btn" data-close>Not yet</button></div>`;
+  else body = `<p>"Nobody below <b>level ${hood.minLevel}</b> gets past me..."</p>
+      <p>"...unless something <i>sweet</i> changes my mind. <b>${hood.unlockCost} candy</b>, and I'll forget I ever saw you. Once paid, I never ask again."</p>
+      <p class="muted small">You're level ${p.level} with ${total} 🍬.</p>
+      <div class="actions"><button class="btn primary" id="btn-keeper-enter" ${total < hood.unlockCost ? 'disabled' : ''}>Bribe ${hood.unlockCost} 🍬</button><button class="btn" data-close>Leave</button></div>`;
+  showModal(`<div class="big-icon">💀</div><h2>The Gatekeeper</h2><p class="muted small">Guardian of ${esc(hood.name)} · ${hood.candyMultiplier}× candy inside</p>${body}`);
+  const enter = $('#btn-keeper-enter');
+  if (enter) enter.onclick = async () => {
+    try {
+      const pos = S.gfx.pos;
+      const r = await api('unlock', { neighborhood: hoodId, pos: { x: pos.x, z: pos.z } });
+      closeModal();
+      toast(r.bribed ? `The gatekeeper pockets ${r.paid} candy and swings the gate open.` : 'The gate creaks open.');
+      await reloadHouse();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+
 function toggleDrawer(force) {
   S.drawer = force ?? !S.drawer;
   $('#drawer').classList.toggle('open', S.drawer);
-  if (S.drawer) renderTab();
+  if (S.drawer) {
+    renderTab();
+    tutorialEvent('menu');
+  }
+}
+
+function setBeaconHouse(id) {
+  const lay = id && S.catalog.layout.houses[id];
+  S.beacon = id;
+  S.gfx?.world.setBeacon(lay ? { x: lay.x, z: lay.z, h: 120 } : null);
+}
+
+// ---------- help ----------
+
+function showHelp() {
+  showModal(helpHtml(S.catalog), { wide: true });
+}
+
+// ---------- tutorial ----------
+
+const TUTORIAL = [
+  { id: 'welcome', title: 'Welcome to Hollow Lane!', text: 'You are a trick-or-treater with a jack-o\'-lantern bucket. Tonight, every door is a surprise.', next: true },
+  { id: 'move', title: 'Walk around', text: 'Use <kbd>W A S D</kbd> or the arrow keys to walk (joystick on phones). Hold <kbd>Shift</kbd> to run.' },
+  { id: 'knock', title: 'Knock on a door', text: 'Follow the gold arrow to a door, then <b>hold &amp; release <kbd>E</kbd></b> to knock.', beacon: 'house' },
+  { id: 'more', title: 'Every door is different', text: 'Candy, tricks, scares and monsters! Read each house\'s clue before you knock. Knock on <b>2 more doors</b>.' },
+  { id: 'bank', title: 'Bank your candy', text: 'Monsters steal from your bucket. Carry it to the <b>Candy Bank</b> (pink roof, follow the arrow) and press <kbd>E</kbd>.', beacon: 'bank' },
+  { id: 'menu', title: 'Your menu', text: 'Press <kbd>Tab</kbd> or ☰ Menu for missions, the shop, the house board and leaderboards.' },
+  { id: 'gate', title: 'Gatekeepers', text: 'The upper neighborhoods are fenced off. Walk over to a <b>Gatekeeper</b>: they let you in at a high enough level, or for a one-time candy bribe.', beacon: 'keeper', next: true },
+  { id: 'done', title: 'Happy haunting!', text: 'Dark houses with FOR SALE signs can be bought later. Press <kbd>H</kbd> any time for How to Play. Now... one more door?', next: true, finish: true },
+];
+
+function startTutorial() {
+  S.tut = { i: 0, moved: 0, knocks: 0 };
+  renderTutorial();
+}
+
+function endTutorial(skipped = false) {
+  S.tut = null;
+  localStorage.setItem('knock.tutorial', 'done');
+  $('#tutorial').hidden = true;
+  setBeaconHouse(null);
+  if (skipped) toast('Tutorial skipped. Press H any time for How to Play.');
+}
+
+function renderTutorial() {
+  const step = TUTORIAL[S.tut.i];
+  S.tut.step = step.id;
+  const el = $('#tutorial');
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="tut-head"><span class="tut-count">Tutorial ${S.tut.i + 1}/${TUTORIAL.length}</span><button class="btn small" id="btn-tut-skip">Skip tutorial</button></div>
+    <h3>${step.title}</h3><p>${step.text}</p>
+    ${step.id === 'more' ? `<div class="progress"><div style="width:${(S.tut.knocks / 2) * 100}%"></div></div>` : ''}
+    ${step.next ? `<div class="actions"><button class="btn primary small" id="btn-tut-next">${step.finish ? 'Start playing' : 'Next'}</button></div>` : ''}`;
+  $('#btn-tut-skip').onclick = () => endTutorial(true);
+  const next = $('#btn-tut-next');
+  if (next) next.onclick = () => (step.finish ? endTutorial() : advanceTutorial());
+  // point the way
+  const L = S.catalog.layout;
+  if (step.beacon === 'bank') S.gfx.world.setBeacon({ x: L.bank.x, z: L.bank.z, h: 128 });
+  else if (step.beacon === 'keeper' && L.keepers[0]) {
+    const pos = S.gfx.pos;
+    const k = [...L.keepers].sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z))[0];
+    S.gfx.world.setBeacon({ x: k.x, z: k.z, h: 56 });
+  } else if (step.beacon === 'house') {
+    const pos = S.gfx.pos;
+    const near = S.world.houses.filter((h) => h.knockable && !h.secret && L.houses[h.id])
+      .sort((a, b) => Math.hypot(L.houses[a.id].x - pos.x, L.houses[a.id].z - pos.z) - Math.hypot(L.houses[b.id].x - pos.x, L.houses[b.id].z - pos.z))[0];
+    if (near) setBeaconHouse(near.id);
+  } else setBeaconHouse(S.beacon && !S.tut ? S.beacon : null);
+}
+
+function advanceTutorial() {
+  if (!S.tut) return;
+  S.tut.i += 1;
+  if (S.tut.i >= TUTORIAL.length) return endTutorial();
+  renderTutorial();
+}
+
+function tutorialMoved(step) {
+  if (S.tut.step !== 'move') return;
+  S.tut.moved += step;
+  if (S.tut.moved > 4) advanceTutorial();
+}
+
+function tutorialEvent(kind) {
+  if (!S.tut) return;
+  const id = S.tut.step;
+  if (kind === 'knock' && id === 'knock') advanceTutorial();
+  else if (kind === 'knock' && id === 'more') {
+    S.tut.knocks += 1;
+    if (S.tut.knocks >= 2) advanceTutorial();
+    else renderTutorial();
+  } else if (kind === 'deposit' && id === 'bank') advanceTutorial();
+  else if (kind === 'menu' && id === 'menu') advanceTutorial();
+  else if (kind === 'keeper' && id === 'gate') advanceTutorial();
 }
 
 // ---------- minimap ----------
@@ -280,61 +452,49 @@ function drawMinimap(pos) {
   const cv = $('#minimap');
   const g = cv.getContext('2d');
   const W = cv.width;
-  const scale = W / 170;
+  const scale = W / 150;
   const L = S.catalog.layout;
   const X = (x) => W / 2 + (x - pos.x) * scale;
   const Y = (z) => W / 2 - (z - pos.z) * scale;
   g.clearRect(0, 0, W, W);
-  g.fillStyle = 'rgba(18,13,29,0.85)';
-  g.beginPath();
-  g.arc(W / 2, W / 2, W / 2, 0, Math.PI * 2);
-  g.fill();
-  g.save();
-  g.clip();
-  g.fillStyle = '#2b2440';
+  g.fillStyle = '#1e1830';
+  g.fillRect(0, 0, W, W);
+  g.fillStyle = '#3d5552';
   for (const zn of L.zones) g.fillRect(X(zn.minX), Y(zn.maxZ), (zn.maxX - zn.minX) * scale, (zn.maxZ - zn.minZ) * scale);
-  g.strokeStyle = '#4a4458';
-  g.lineWidth = 10 * scale;
-  for (const st of L.streets) {
-    g.beginPath();
-    g.moveTo(X(st.from.x), Y(st.from.z));
-    g.lineTo(X(st.to.x), Y(st.to.z));
-    g.stroke();
-  }
-  const dot = (x, z, color, r = 4) => {
+  g.fillStyle = '#6e6a80';
+  for (const r of L.roads) g.fillRect(X(r.minX), Y(r.maxZ), (r.maxX - r.minX) * scale, (r.maxZ - r.minZ) * scale);
+  const dot = (x, z, color, r = 2.5) => {
     g.fillStyle = color;
-    g.beginPath();
-    g.arc(X(x), Y(z), r, 0, Math.PI * 2);
-    g.fill();
+    g.fillRect(Math.round(X(x) - r), Math.round(Y(z) - r), r * 2, r * 2);
   };
-  dot(L.bank.x, L.bank.z, '#ff4fa3', 6);
+  dot(L.bank.x, L.bank.z + 1.5, '#ff4fa3', 4);
+  for (const k of L.keepers) {
+    const open = S.world.neighborhoods.find((n) => n.id === k.hood)?.unlocked;
+    dot(k.x, k.z, open ? '#6ee7a0' : '#ffd34d', 3);
+  }
   for (const h of S.world.houses) {
     const lay = L.houses[h.id];
     if (!lay) continue;
-    const color = h.forSale ? '#ffd34d' : h.hot ? '#ff8a1f' : h.owner ? '#b48cff' : h.secret ? '#ffe680' : S.player.routeVisited.includes(h.id) ? '#555' : h.onRoute ? '#fff4b0' : '#8a8299';
-    dot(lay.x, lay.z, color, h.onRoute || h.hot ? 5 : 3.5);
+    const color = h.forSale ? '#ffd34d' : h.hot ? '#ff8a1f' : h.owner ? '#b48cff' : h.secret ? '#ffe680' : S.player.routeVisited.includes(h.id) ? '#555' : h.onRoute ? '#fff4b0' : '#a59fb5';
+    dot(lay.x, lay.z + 1.5, color, h.onRoute || h.hot ? 3 : 2.5);
   }
   if (S.beacon && L.houses[S.beacon]) {
     g.strokeStyle = '#ffd34d';
     g.lineWidth = 2;
-    g.beginPath();
-    g.arc(X(L.houses[S.beacon].x), Y(L.houses[S.beacon].z), 8, 0, Math.PI * 2);
-    g.stroke();
+    g.strokeRect(X(L.houses[S.beacon].x) - 6, Y(L.houses[S.beacon].z + 1.5) - 6, 12, 12);
   }
-  g.restore();
-  // player arrow
-  const f = S.gfx.facing;
-  g.save();
-  g.translate(W / 2, W / 2);
-  g.rotate(-f + Math.PI);
+  // player
+  const d = S.gfx.hero.dir;
   g.fillStyle = '#6ee7a0';
   g.beginPath();
-  g.moveTo(0, -8);
-  g.lineTo(5, 6);
-  g.lineTo(-5, 6);
-  g.closePath();
+  const pts = { 0: [[0, 6], [-5, -4], [5, -4]], 1: [[0, -6], [-5, 4], [5, 4]], 2: [[-6, 0], [4, -5], [4, 5]], 3: [[6, 0], [-4, -5], [-4, 5]] }[d];
+  g.moveTo(W / 2 + pts[0][0], W / 2 + pts[0][1]);
+  g.lineTo(W / 2 + pts[1][0], W / 2 + pts[1][1]);
+  g.lineTo(W / 2 + pts[2][0], W / 2 + pts[2][1]);
   g.fill();
-  g.restore();
+  g.strokeStyle = '#4a4458';
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, W - 2, W - 2);
 }
 
 async function refreshWorld() {
@@ -527,7 +687,7 @@ function renderShop() {
     <h3 class="section">Neighborhoods</h3>
     <div class="list">${S.world.neighborhoods.map((n) => `<div class="item"><div><div class="title">${n.unlocked ? '🔓' : '🔒'} ${esc(n.name)}</div>
       <div class="muted small">Level ${n.minLevel} · ${n.candyMultiplier}× candy</div></div>
-      ${n.unlocked ? '<span class="muted">Open</span>' : `<button class="btn small primary" data-unlock="${n.id}" ${p.level < n.minLevel || total < n.unlockCost ? 'disabled' : ''}>${n.unlockCost} 🍬</button>`}</div>`).join('')}</div>
+      ${n.unlocked ? '<span class="muted">Open</span>' : `<span class="muted small">Gatekeeper: level ${n.minLevel} or ${n.unlockCost} 🍬 bribe</span>`}</div>`).join('')}</div>
     <h3 class="section">Daily cosmetic raffle</h3>
     <div class="item"><div><div class="title">${c.costumes[c.raffle.prizeCostume].icon} ${esc(c.costumes[c.raffle.prizeCostume].name)} costume</div>
       <div class="muted small">${p.raffleTickets}/${c.raffle.maxTicketsPerDay} tickets today · drawn at midnight UTC</div></div>
@@ -608,8 +768,10 @@ function renderMe() {
       ${pr.requested ? '<span class="muted">Requested</span>' : `<button class="btn small ${pr.met ? 'primary' : ''}" data-prize="${pr.id}" ${pr.met ? '' : 'disabled'}>Redeem</button>`}</div>`).join('')}</div>
     <h3 class="section">Monster field guide</h3>
     <div class="list">${c.npcMonsters.map((m) => `<div class="item small"><span>${esc(m.name)} the ${esc(m.type)}</span><span class="muted">weak to ${c.counters[c.monsterCounters[m.type]].icon} ${esc(c.counters[c.monsterCounters[m.type]].name)}</span></div>`).join('')}</div>
-    <p class="section"><button class="btn small" id="btn-logout">Log out</button></p>`;
-  $('#btn-logout').onclick = () => confirm('Log out? Your progress is tied to this browser.') && logout();
+    <p class="section row-actions"><button class="btn small" id="btn-help">❔ How to play</button><button class="btn small" id="btn-replay-tut">🎓 Replay tutorial</button><button class="btn small" id="btn-logout">Log out</button></p>`;
+  $('#btn-help').onclick = () => showHelp();
+  $('#btn-replay-tut').onclick = () => { toggleDrawer(false); startTutorial(); };
+  $('#btn-logout').onclick = () => { if (confirm('Log out? Your progress is tied to this browser.')) { toggleDrawer(false); $('#game').hidden = true; logout(); } };
 }
 
 async function renderStreets() {
@@ -688,8 +850,7 @@ async function selectHouse(id, { open = true } = {}) {
   S.selected = id;
   S.houseDetail = await api(`house/${id}`);
   S.tab = 'porch';
-  S.beacon = id;
-  S.gfx?.world.setBeacon(id);
+  setBeaconHouse(id);
   if (open) toggleDrawer(true);
   else renderTab();
 }
@@ -725,6 +886,7 @@ document.addEventListener('click', async (e) => {
     let x;
     if ((x = el('[data-house]'))) return await selectHouse(Number(x.dataset.house));
     if (el('#btn-menu')) return toggleDrawer();
+    if (el('#btn-help-hud')) return showHelp();
     if (el('#btn-close-drawer')) return toggleDrawer(false);
     if ((x = el('[data-tab]'))) {
       S.tab = x.dataset.tab;
@@ -744,9 +906,6 @@ document.addEventListener('click', async (e) => {
     } else if ((x = el('[data-train]'))) {
       await api('train', { stat: x.dataset.train });
       toast('Training complete!');
-    } else if ((x = el('[data-unlock]'))) {
-      await api('unlock', { neighborhood: x.dataset.unlock });
-      toast('New neighborhood unlocked!');
     } else if ((x = el('[data-craft]'))) {
       const { card } = await api('craft', { cardId: x.dataset.craft });
       toast(`Crafted: ${card.name} (${card.rarity})`);
@@ -770,8 +929,9 @@ async function doBank() {
   if (S.busy) return;
   S.busy = true;
   try {
-    const pos = S.gfx.hero.root.position;
+    const pos = S.gfx.pos;
     const r = await api('bank', { pos: { x: pos.x, z: pos.z } });
+    tutorialEvent('deposit');
     S.gfx.hero.play('cheer', 0.9);
     showModal(`<div class="big-icon">🏦</div><h2>Candy Bank</h2>
       <p>You deposited <b>${r.banked} 🍬</b>. It's safe from monsters now.</p>
@@ -874,6 +1034,7 @@ function runAmbush(ambush) {
 function showResult(r) {
   S.lastResult = r;
   react(r);
+  tutorialEvent('knock');
   const jackpot = r.jackpot;
   let icon = ICON[jackpot ? 'jackpot' : r.outcome];
   let title = LABEL[r.outcome];
@@ -1012,8 +1173,9 @@ function wrap(g, text, x, y, maxW, lh) {
 
 // ---------- modal ----------
 
-function showModal(html, { locked = false } = {}) {
+function showModal(html, { locked = false, wide = false } = {}) {
   $('#modal-card').innerHTML = html;
+  $('#modal-card').classList.toggle('wide', wide);
   $('#modal').hidden = false;
   $('#modal').dataset.locked = locked ? '1' : '';
 }

@@ -16,7 +16,8 @@ const port = Number(process.env.PORT) || 3000;
 
 const season = loadSeason(seasonFile);
 const store = createStore(dataFile);
-const game = createGame({ season, state: store.state, onChange: store.changed });
+const DEV = process.env.DEV === '1';
+const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const publicDir = path.join(root, 'public');
@@ -74,7 +75,7 @@ const routes = {
   'POST /api/buy': (t, b) => game.buy(t, b.kind, b.itemId),
   'POST /api/equip': (t, b) => game.equip(t, b.costumeId),
   'POST /api/train': (t, b) => game.train(t, b.stat),
-  'POST /api/unlock': (t, b) => game.unlock(t, b.neighborhood),
+  'POST /api/unlock': (t, b) => game.unlock(t, b.neighborhood, b.pos),
   'POST /api/raffle': (t, b) => game.raffle(t, b.tickets),
   'POST /api/craft': (t, b) => game.craft(t, b.cardId),
   'POST /api/mint-card': (t, b) => game.mintCard(t, b.cardId),
@@ -96,6 +97,11 @@ const routes = {
   'POST /api/monster/claim': (t) => game.claimMonsterBoo(t),
   'POST /api/bounty': (t, b) => game.postBounty(t, b.monster, b.amount),
 };
+
+// Dev build: /api/dev/<action> with { args: [...] } calls game.dev[action](token, ...args).
+if (DEV) {
+  for (const name of Object.keys(game.dev)) routes[`POST /api/dev/${name}`] = (t, b) => game.dev[name](t, ...(Array.isArray(b.args) ? b.args : []));
+}
 
 async function handleApi(req, res, url) {
   if (rateLimited(req.socket.remoteAddress)) return send(res, 429, { error: 'Too many requests' });
@@ -138,7 +144,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`🎃 Knock is running at http://localhost:${port}`);
+  console.log(`🎃 Knock is running at http://localhost:${port}${DEV ? '  [DEV BUILD: dev panel enabled]' : ''}`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

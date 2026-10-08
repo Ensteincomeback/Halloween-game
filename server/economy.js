@@ -78,14 +78,28 @@ export function installEconomy(ctx) {
     p.trained[stat] += 1;
   };
 
-  ctx.unlockHood = (p, hoodId) => {
+  // Gatekeepers guard the upper neighborhoods. Reach the level and they wave
+  // you through for free; otherwise a one-time candy bribe does it. Either way
+  // it is permanent. You have to be standing at the gate.
+  ctx.unlockHood = (p, hoodId, pos) => {
     const hood = ctx.hood(hoodId);
     if (!hood) throw new GameError('No such neighborhood', 404);
-    if (p.unlocked.includes(hoodId)) throw new GameError('Already unlocked');
-    if (ctx.level(p) < hood.minLevel) throw new GameError(`Reach level ${hood.minLevel} first`);
-    ctx.spend(p, hood.unlockCost, 'unlock');
+    if (p.unlocked.includes(hoodId)) throw new GameError('The gatekeeper already knows you. Go on in.');
+    const keeper = ctx.layout.keepers.find((k) => k.hood === hoodId);
+    if (keeper) {
+      const x = Number(pos?.x);
+      const z = Number(pos?.z);
+      if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - keeper.spot.x, z - keeper.spot.z) > season.travel.bankRadius) {
+        throw new GameError(`Talk to the gatekeeper at the ${hood.name} gate.`, 403);
+      }
+      ctx.checkTravel(p, keeper.spot);
+      ctx.arrive(p, keeper.spot);
+    }
+    const free = ctx.level(p) >= hood.minLevel;
+    if (!free) ctx.spend(p, hood.unlockCost, 'bribe');
     p.unlocked.push(hoodId);
-    ctx.pushFeed('unlock', `${p.name} entered ${hood.name}.`);
+    ctx.pushFeed('unlock', free ? `The gatekeeper let ${p.name} into ${hood.name}.` : `${p.name} bribed their way into ${hood.name}.`);
+    return { bribed: !free, paid: free ? 0 : hood.unlockCost };
   };
 
   // ---------- cosmetic raffle (prize is a non-transferable costume) ----------

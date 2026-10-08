@@ -6,31 +6,45 @@
   <title>Knock: Trick-or-Treat</title>
   <meta name="description" content="Knock on doors. Collect candy. Survive monsters.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎃</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
 </head>
 <body>
-  <!-- Login -->
-  <section id="login" class="screen" hidden>
-    <div class="login-card">
-      <div class="logo">🎃 Knock</div>
-      <p class="tagline">Knock on doors. Collect candy.<br>Survive monsters.</p>
-      <form id="login-form">
-        <input id="login-name" maxlength="20" placeholder="Your trick-or-treater name" autocomplete="nickname" required>
-        <button class="btn primary big" type="submit">Start trick-or-treating</button>
+  <!-- Start menu -->
+  <section id="start" class="screen" hidden>
+    <div class="start-card">
+      <div class="start-title">KNOCK</div>
+      <p class="tagline">Knock on doors. Collect candy. Survive monsters.</p>
+      <canvas id="start-preview" width="96" height="192" aria-label="Your character"></canvas>
+      <form id="start-form">
+        <label class="field">
+          <span>Character name</span>
+          <input id="start-name" maxlength="20" placeholder="Your trick-or-treater" autocomplete="nickname">
+        </label>
+        <p id="start-returning" class="muted small" hidden>Welcome back! <span id="start-returning-name"></span> · <a href="#" id="btn-new-character">New character</a></p>
+        <div class="field">
+          <span>Solana wallet <em class="muted">(optional · preview)</em></span>
+          <button type="button" id="btn-wallet" class="btn wallet-btn">◎ Connect wallet</button>
+          <div id="wallet-connected" class="wallet-connected" hidden>
+            <span>◎ <b id="wallet-addr"></b></span><span class="badge">Devnet preview</span>
+            <button type="button" id="btn-wallet-disconnect" class="btn small">Disconnect</button>
+          </div>
+        </div>
+        <button class="btn primary big" id="btn-play" type="submit">▶ Play</button>
+        <button type="button" class="btn" id="btn-start-help">❔ How to play</button>
       </form>
-      <p class="fine">90% Tricks. 10% Treats.<br>No wallet needed. Just knock.</p>
+      <p class="fine">90% Tricks. 10% Treats.</p>
     </div>
   </section>
 
   <!-- Game -->
   <section id="game" class="screen" hidden>
     <div id="stage"></div>
-    <div id="loading" hidden><div class="logo">🎃 Knock</div><p>Building the neighborhood…</p><div class="bar"><div id="loading-bar"></div></div></div>
 
     <header class="hud">
       <div class="hud-left">
-        <span class="logo small">🎃 Knock</span>
+        <span class="logo small">KNOCK</span>
         <span id="hud-player" class="chip"></span>
       </div>
       <div class="hud-stats">
@@ -41,15 +55,21 @@
         <div class="stat" title="Daily streak"><span class="lbl">Streak</span><span id="hud-streak" class="val"></span></div>
         <div class="stat" id="hud-boo-wrap" hidden title="Your $BOO balance"><span class="lbl">$BOO</span><span id="hud-boo" class="val"></span></div>
       </div>
-      <button id="btn-menu" class="btn">☰ Menu <kbd>Tab</kbd></button>
+      <div class="hud-right">
+        <button id="btn-dev" class="btn dev-btn" hidden>DEV</button>
+        <button id="btn-help-hud" class="btn" title="How to play (H)">❔</button>
+        <button id="btn-menu" class="btn">☰ Menu <kbd>Tab</kbd></button>
+      </div>
     </header>
 
     <div id="banners"></div>
-    <canvas id="minimap" width="180" height="180" title="Map: pink = Candy Bank, yellow = for sale, orange = Hot House, white = today's route"></canvas>
+    <canvas id="minimap" width="160" height="160" title="Map: pink = Candy Bank, yellow = for sale / gatekeeper, orange = Hot House, white = today's route"></canvas>
+    <div id="tutorial" hidden></div>
     <div id="prompt" hidden></div>
     <button id="btn-action" class="btn primary" hidden>Knock</button>
     <div id="joystick" hidden><div id="joystick-knob"></div></div>
-    <div id="controls-hint">WASD move · Shift run · drag to look · E knock · Tab menu</div>
+    <div id="controls-hint">WASD move · Shift run · E knock / talk · Tab menu · H help</div>
+    <div id="devpanel" hidden></div>
 
     <aside id="drawer" class="side">
       <nav class="tabs" role="tablist">

@@ -22,34 +22,55 @@ Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DA
 > claims and anchors. It has the same shape as the Solana programs the game needs, so it
 > can be swapped for a real client. $BOO here is test currency, from a once-a-day devnet faucet.
 
-## The 3D world
+## The world (2D pixel art)
 
-The game is a third-person 3D neighborhood built with [three.js](https://threejs.org)
-(vendored in `public/vendor`, MIT). The art is built from the hand-made low-poly models in
-`public/models`: **Ghost Kid** and **Witch Kid** (player characters), **Haunted Mansion**
-and **Witch Hut** (houses), and the **Knock street map**, which supplies the trees, tombstones,
-street lamps and floating ghost (`props.glb`) and sets the palette.
+A top-down pixel-art neighborhood in the spirit of Stardew Valley, drawn on a plain
+`<canvas>` with no dependencies. Every sprite (11 kid costumes in 4 directions, 10 house
+types, the Candy Bank, gatekeepers, fences, trees, lamps, tombstones, ghosts) is drawn in
+code in `public/js/pixel/sprites.js`, following the designs and palette of the original
+models in `art/reference-models/`. A night lighting pass cuts pools of light from street
+lamps, windows, porch lights and the candle in your bucket.
 
-- **Controls**: `WASD`/arrows to walk, `Shift` to run, drag to look, wheel to zoom, and
-  **hold & release `E`** at a door to knock. `Tab` opens the menu. On phones: touch joystick,
-  drag to look, and the action button.
-- **Your character** is an animated kid model in your costume. The jack-o'-lantern bucket
-  fills with candy as your bag does. Every costume (ghost, witch, mummy, werewolf, vampire,
-  hunter, skeleton, headless horseman, pumpkin king, banshee, hazmat) is one of the kid models
-  recolored, plus extra pieces.
-- **Neighborhoods**: Hollow Lane (north), Crypt Row (east) and Witchwood Heights (west) branch
-  off a town square. Locked neighborhoods have iron gates, and secret houses sit behind hedges
-  at the end of each street.
-- **NPC homes vs. empty lots**: most houses are NPC homes you knock on. Scattered among them
-  are **empty houses**: dark, boarded up, with a FOR SALE sign. These are the NFT deeds players
-  can buy. Once bought they light up, carry the owner's sign, and can be knocked on.
-- **The Candy Bank** is a building in the town square. To keep your candy safe you have to
-  carry your bucket there and deposit it; there is no bank button.
-- **Tells are visible**: flickering or flashing windows, a warm porch light, caramel steam
-  from the chimney, a jack-o'-lantern on the step, rustling bushes, claw marks on the door.
-- **Anti-teleport**: the server knows where every door and the bank are
-  (`server/layout.js`, shared with the client). It rejects any knock or deposit that would
-  need faster-than-running travel since the player's last action.
+- **Start menu**: character name, a *Connect Solana wallet* button (Phantom / Solflare /
+  Backpack, a visual preview only for now), Play, and How to Play.
+- **Tutorial**: after Play, new players get an interactive tutorial in the real world
+  (walk, knock, knock again, bank your candy, open the menu, meet a gatekeeper), with a
+  **Skip tutorial** button on every step. Replay it from Me → Replay tutorial.
+- **How to Play**: a one-screen rundown of every feature (`H`, the ❔ button, or the start menu).
+- **Controls**: `WASD`/arrows to walk, `Shift` to run, **hold & release `E`** at a door to
+  knock (or talk/deposit), `Tab` menu, `H` help. Phones: floating joystick + action button.
+- **Neighborhoods**: a town square (Candy Bank, pumpkin fountain) with Hollow Lane to the
+  north, Crypt Row to the east and Witchwood Heights to the west. Each has two streets of
+  houses. **Fences run exactly along the edges of the walkable area**, so nothing can be
+  walked through.
+- **Gatekeepers**: Crypt Row and Witchwood Heights are fenced with a locked gate. Their
+  Gatekeeper lets you in for free once you reach the level, or for a **one-time candy
+  bribe**. Either way it's permanent, and the server checks you're standing at the gate.
+- **NPC homes vs. empty lots**: most houses are NPC homes. Dark, boarded-up houses with
+  FOR SALE signs are the NFT lots; once bought they light up with the owner's sign.
+- **The Candy Bank** is a building in the square. Walk your bucket there and press `E`.
+- **Tells are visible**: flickering or flashing windows, a big warm porch light, caramel
+  steam from the chimney, a jack-o'-lantern, rustling bushes, claw marks on the door.
+- **Anti-teleport**: the server knows where every door, the bank and the gatekeepers are
+  (`server/layout.js`, shared with the client) and rejects actions that would need
+  faster-than-running travel since the last one.
+
+## Dev build
+
+```bash
+npm run dev        # same game + a dev panel (press ` or the red DEV button)
+```
+
+The dev panel only exists when the server runs with `DEV=1`. Its `/api/dev/*` endpoints
+are not registered otherwise. It lets you skip the grind:
+
+- +10k / +1M candy, fill your bucket, +5k $BOO, 999 knocks, set any level
+- become any Scare Actor instantly (stake and bond warm-up skipped, full Fright)
+- unlock every neighborhood, costume, monster card or secret house
+- **force the next knock** (any outcome, including a Golden Pumpkin jackpot)
+- spawn a rival player-monster's ambush or trap at the nearest house, clear your shield
+- open the Legendary Mansion, settle owner/monster payouts now, start a new day
+- teleport anywhere, turn off the travel-speed check, and replay the tutorial
 
 ## The game
 
@@ -187,9 +208,10 @@ Nightfall all shift these numbers, within protocol caps.
 ## Architecture
 
 ```
-public/js/         3D client: world3d (scene), character (kid models), input, assets, main
-public/models/     Hand-made GLB models (kids, houses, street props)
-public/vendor/     three.js + GLTFLoader (MIT)
+public/js/main.js  Client: start menu, tutorial, HUD, menus, knock/bank/gatekeeper flows
+public/js/pixel/   Pixel-art sprites (sprites.js), world renderer (world2d.js), player (actor.js)
+public/js/ui/      How to Play and the dev panel
+art/               Reference models the pixel art is based on
 server/index.js    HTTP API + static files
 server/game.js     Wires the modules; views, leaderboards, public API
 server/core.js     Players, energy, candy flow, trust, feed
@@ -199,7 +221,8 @@ server/monsters.js License, Fright, lairs, monster results, bounties
 server/economy.js  Shop, training, raffle, cards, prizes, claims, missions
 server/chain.js    Simulated chain: token, NFTs, stake, escrow, signed claims, anchors
 server/config.js   Season Pack loader (extends + merge)
-server/layout.js   World layout (house, door, bank positions), shared with the client
+server/layout.js   World layout (houses, doors, bank, gates, gatekeepers), shared with the client
+server/dev.js      Dev-build shortcuts (only with DEV=1)
 season/            Season Packs
 test/              Rule tests with a deterministic clock and RNG
 ```

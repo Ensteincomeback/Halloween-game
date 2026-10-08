@@ -10,12 +10,13 @@ import { installEconomy } from './economy.js';
 import { createChain } from './chain.js';
 import { seasonHash } from './config.js';
 import { buildLayout } from './layout.js';
+import { installDev } from './dev.js';
 
 export { GameError, buildOdds, rollOutcome, OUTCOMES };
 
 const DIVISIONS = { all: [1, Infinity], novice: [1, 4], regular: [5, 9], veteran: [10, Infinity] };
 
-export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {} }) {
+export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {}, dev: devMode = false }) {
   state.serverSecret ??= crypto.randomBytes(32).toString('hex');
   const chain = createChain({ state, token: season.token, now, secret: state.serverSecret });
   const layout = buildLayout(season);
@@ -108,7 +109,9 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       cards: season.cards.list, cardRules: { craftCost: season.cards.craftCost, craftDuplicates: season.cards.craftDuplicates },
       odds: strip(season.odds), houseTypes: season.houseTypes, dial: season.houses.dial,
       raffle: season.raffle, trophies: season.trophies,
-      layout, travel: season.travel,
+      layout, travel: season.travel, dev: devMode,
+      outcomes: OUTCOMES, neighborhoods: season.neighborhoods.map(({ id, name, minLevel, unlockCost }) => ({ id, name, minLevel, unlockCost })),
+      secretHouses: season.secretHouses,
     };
   }
 
@@ -176,7 +179,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     buy: withPlayer((p, kind, itemId) => ctx.buy(p, kind, itemId)),
     equip: withPlayer((p, id) => ctx.equip(p, id)),
     train: withPlayer((p, stat) => ctx.train(p, stat)),
-    unlock: withPlayer((p, hoodId) => ctx.unlockHood(p, hoodId)),
+    unlock: withPlayer((p, hoodId, pos) => ctx.unlockHood(p, hoodId, pos)),
     raffle: withPlayer((p, n) => ctx.buyRaffle(p, n)),
     craft: withPlayer((p, cardId) => ({ card: ctx.craft(p, cardId) })),
     mintCard: withPlayer((p, cardId) => ({ nft: ctx.mintCard(p, cardId) })),
@@ -225,6 +228,8 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       slash: (playerId, amount, reason) => chain.slash(state.players[playerId].wallet, amount, reason),
       redemptions: () => state.redemptions,
     },
+    // Dev build only: every action takes (token, ...args) like the rest of the API.
+    dev: devMode ? Object.fromEntries(Object.entries(installDev(ctx)).map(([k, fn]) => [k, withPlayer(fn)])) : null,
     _ctx: ctx,
   };
 }

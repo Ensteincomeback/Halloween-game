@@ -85,7 +85,7 @@ export function installHouses(ctx) {
     return [...ids].sort((a, b) => score(a) - score(b)).slice(0, H.routeLength).sort((a, b) => a - b);
   };
 
-  ctx.legendaryEventOpen = () => new Date(now()).getUTCHours() === season.legendaryEvent.hourUtc;
+  ctx.legendaryEventOpen = () => !!state.global.devEvent || new Date(now()).getUTCHours() === season.legendaryEvent.hourUtc;
 
   // ---------- reputation ----------
   // 0-100: payout rate vs. expected for the type, trust weighted, time decayed

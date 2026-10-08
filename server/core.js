@@ -232,7 +232,7 @@ export function installCore(ctx) {
   ctx.checkTravel = (p, to) => {
     const T = season.travel;
     const from = p.lastPos;
-    if (!from || !T) return;
+    if (!from || !T || p.devNoTravel) return;
     const dist = Math.hypot(to.x - from.x, to.z - from.z);
     const reach = (T.maxSpeed * (now() - from.t + T.graceMs)) / 1000;
     if (dist > reach) {

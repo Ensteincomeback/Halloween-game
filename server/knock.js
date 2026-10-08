@@ -88,7 +88,11 @@ export function installKnock(ctx) {
     if (p.boosts.luck > 0) p.boosts.luck -= 1;
     if (p.boosts.nightvision > 0) p.boosts.nightvision -= 1;
 
-    let outcome = p.totalKnocks <= TUTORIAL.length ? TUTORIAL[p.totalKnocks - 1] : null;
+    // Dev build: a forced outcome skips the dice and the protections below.
+    const forced = p.devForce;
+    delete p.devForce;
+    p.devJackpot = forced === 'jackpot';
+    let outcome = forced ? (forced === 'jackpot' ? 'legendary' : forced) : p.totalKnocks <= TUTORIAL.length ? TUTORIAL[p.totalKnocks - 1] : null;
     let pity = false;
     if (!outcome) {
       if (p.pity + 1 >= season.pity.rareOrBetterWithin) {
@@ -97,19 +101,20 @@ export function installKnock(ctx) {
       } else outcome = rollOutcome(weights, rng);
     }
 
-    const shielded = now() < p.shieldUntil || p.totalKnocks <= A.newPlayerGraceKnocks;
+    const shielded = !forced && (now() < p.shieldUntil || p.totalKnocks <= A.newPlayerGraceKnocks);
     // A player monster's lair can spring on any knock at its house.
     let lair = null;
     if (!pity && !shielded && p.totalKnocks > TUTORIAL.length) {
       lair = ctx.eligibleLair(p, h);
-      if (lair && outcome !== 'ambush' && rng() >= M.lairTriggerChance) lair = null;
+      if (lair && !lair.devAlways && outcome !== 'ambush' && rng() >= M.lairTriggerChance) lair = null;
     }
     let npc = null;
     if (!lair && outcome === 'ambush') {
+      if (forced) p.monsterHits = {};
       npc = shielded ? null : chooseNpc(p);
       if (!npc) outcome = 'trick';
     }
-    if (outcome === 'legendary' && p.trust < season.trust.legendaryMinTrust) outcome = 'rare';
+    if (outcome === 'legendary' && !forced && p.trust < season.trust.legendaryMinTrust) outcome = 'rare';
     if (outcome === 'secretHouse' && !unfoundSecret(p)) outcome = 'rare';
     if (lair) outcome = lair.kind === 'trap' ? 'trap' : 'ambush';
 
@@ -244,7 +249,7 @@ export function installKnock(ctx) {
     const g = state.global;
     const ss = ctx.seasonStats(p);
     ss.legendaries += 1;
-    if (rng() < R.jackpotShareOfLegendary && g.jackpotsToday < R.jackpotGlobalDailyLimit) {
+    if (p.devJackpot || (rng() < R.jackpotShareOfLegendary && g.jackpotsToday < R.jackpotGlobalDailyLimit)) {
       g.jackpotsToday += 1;
       p.trophies.push(season.jackpotTrophy);
       ss.jackpots += 1;

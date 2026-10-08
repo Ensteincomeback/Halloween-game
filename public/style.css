@@ -199,40 +199,75 @@ h3 { font-size: 15px; color: var(--orange2); }
 .banner.gold { background: #3a3110; border-color: #7a6520; color: var(--gold); }
 .locked-hood { background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); padding: 18px; }
 
-/* ---- v3: 3D world ---- */
-#game { position: fixed; inset: 0; overflow: hidden; }
-#stage { position: absolute; inset: 0; }
-#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-#stage canvas:active { cursor: grabbing; }
+/* ---- v4: pixel-art world ---- */
+.pixel-font, .start-title, .logo, .tabs button, .stat .lbl, h2, h3, .btn.big { font-family: 'Silkscreen', ui-monospace, monospace; }
+#start { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; overflow: auto;
+  background: radial-gradient(ellipse at 50% 20%, #3a2a5a 0%, #1a1230 55%, #0e0a1a 100%); }
+.start-card { background: #241b3bee; border: 3px solid #3d3160; box-shadow: 0 0 0 3px #120d1d, 0 20px 60px #000a; padding: 24px; width: 100%; max-width: 420px; text-align: center; image-rendering: pixelated; }
+.start-title { font-size: 56px; font-weight: 700; letter-spacing: 4px; color: var(--orange); text-shadow: 4px 4px 0 #6b2a0a, 0 0 24px #ff8a1f66; line-height: 1; }
+#start-preview { width: 96px; height: 192px; image-rendering: pixelated; margin: 8px auto 4px; display: block; filter: drop-shadow(0 0 12px #ffb06055); }
+#start-form { display: grid; gap: 12px; text-align: left; }
+.field { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.field input { padding: 11px; border: 2px solid var(--line); background: var(--bg2); color: var(--text); font: inherit; font-size: 16px; border-radius: 0; }
+.wallet-btn { background: linear-gradient(90deg, #9945ff, #14f195); color: #0e0a1a; border: 0; }
+.wallet-connected { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--bg2); border: 2px solid #14f19555; padding: 8px 10px; color: var(--text); }
+.badge { font-size: 11px; background: #14f19522; color: #14f195; padding: 2px 6px; }
+.wallet-choice { width: 100%; text-align: left; }
+.btn, .modal-card, .side, .chip, .stat, #prompt, .toast, #tutorial, #devpanel { border-radius: 0 !important; }
+.btn { border-width: 2px; box-shadow: 2px 2px 0 #0b0814; }
+.btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 #0b0814; }
+#game { position: fixed; inset: 0; overflow: hidden; background: #3d4c4b; }
+#stage { position: absolute; inset: 0; touch-action: none; }
+.pixel-view { display: block; image-rendering: pixelated; }
 #game .hud { position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(180deg, #120d1df0, #120d1d00); border: 0; backdrop-filter: none; pointer-events: none; }
 #game .hud > * { pointer-events: auto; }
+.hud-right { display: flex; gap: 6px; align-items: center; }
+.dev-btn { background: #ff4f6a; color: #fff; border-color: #ff4f6a; font-family: 'Silkscreen', monospace; }
 #banners { position: absolute; top: 74px; left: 0; right: 0; display: grid; justify-items: center; gap: 6px; pointer-events: none; z-index: 4; }
-#banners .banner { margin: 0; }
-#minimap { position: absolute; top: 80px; right: 16px; width: 150px; height: 150px; border-radius: 50%; border: 2px solid var(--line); z-index: 4; }
-#prompt { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); background: #120d1de8; border: 1px solid var(--orange); border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 15px; z-index: 5; max-width: min(560px, calc(100vw - 32px)); }
-#prompt .gold, .gold { color: var(--gold); }
-kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px; padding: 0 6px; font: 600 12px/1.6 ui-monospace, monospace; color: var(--orange2); }
-#btn-action { position: absolute; right: 24px; bottom: 28px; width: 96px; height: 96px; border-radius: 50%; font-size: 16px; z-index: 6; display: none; }
+#banners .banner { margin: 0; border-radius: 0; }
+#minimap { position: absolute; top: 80px; right: 16px; width: 150px; height: 150px; z-index: 4; image-rendering: pixelated; border: 2px solid #120d1d; }
+#prompt { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); background: #120d1dee; border: 2px solid var(--orange); padding: 10px 16px; text-align: center; font-size: 15px; z-index: 5; max-width: min(560px, calc(100vw - 32px)); }
+.gold { color: var(--gold); } .ok-text { color: var(--green); }
+kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 3px; padding: 0 6px; font: 600 12px/1.6 ui-monospace, monospace; color: var(--orange2); }
+#btn-action { position: absolute; right: 24px; bottom: 28px; width: 96px; height: 96px; font-size: 15px; z-index: 6; display: none; }
 #joystick { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 2px solid #ffffff44; background: #ffffff10; z-index: 6; pointer-events: none; }
 #joystick-knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: #ff8a1fcc; }
-#controls-hint { position: absolute; bottom: 12px; left: 16px; font-size: 12px; color: var(--muted); background: #120d1daa; padding: 4px 10px; border-radius: 8px; z-index: 4; }
-#drawer { position: absolute; top: 72px; right: 0; bottom: 0; width: min(400px, 100vw); transform: translateX(105%); transition: transform .2s ease; z-index: 8; border-radius: 14px 0 0 0; max-height: none; }
+#controls-hint { position: absolute; bottom: 12px; left: 16px; font-size: 12px; color: var(--muted); background: #120d1daa; padding: 4px 10px; z-index: 4; }
+#drawer { position: absolute; top: 72px; right: 0; bottom: 0; width: min(400px, 100vw); transform: translateX(105%); transition: transform .2s ease; z-index: 8; max-height: none; }
 #drawer.open { transform: none; }
 #drawer .tab { max-height: calc(100vh - 130px); }
 #btn-close-drawer { flex: 0 0 auto !important; color: var(--text) !important; }
+#tutorial { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); width: min(460px, calc(100vw - 32px)); background: #241b3bf2; border: 2px solid var(--gold); box-shadow: 4px 4px 0 #0b0814; padding: 12px 16px; z-index: 7; }
+#tutorial h3 { margin: 4px 0; color: var(--gold); }
+#tutorial p { margin: 4px 0 8px; font-size: 14px; }
+#tutorial .actions { justify-content: flex-end; margin: 0; }
+.tut-head { display: flex; justify-content: space-between; align-items: center; }
+.tut-count { font-size: 11px; color: var(--muted); font-family: 'Silkscreen', monospace; }
+#devpanel { position: absolute; left: 12px; top: 80px; bottom: 50px; width: 320px; overflow-y: auto; z-index: 9; background: #1a1026f5; border: 2px solid #ff4f6a; padding: 10px 12px; font-size: 13px; }
+#devpanel h4 { margin: 12px 0 6px; color: #ff8fa0; font-family: 'Silkscreen', monospace; font-size: 12px; }
+.dev-head { display: flex; justify-content: space-between; align-items: center; color: #ff8fa0; }
+.dev-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.dev-row select { background: var(--bg2); color: var(--text); border: 1px solid var(--line); padding: 4px; max-width: 200px; }
+.modal-card.wide { max-width: 760px; text-align: left; max-height: 90vh; overflow-y: auto; }
+.modal-card.wide h2, .modal-card.wide .actions { text-align: center; }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 12px 0; }
+.help-card { display: flex; gap: 10px; background: var(--bg2); border: 2px solid var(--line); padding: 10px; }
+.help-card p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.help-icon { font-size: 24px; line-height: 1; }
 @media (hover: none), (max-width: 760px) {
   #btn-action:not([hidden]) { display: block; }
   #controls-hint { display: none; }
   #prompt { bottom: 140px; font-size: 13px; }
   #prompt kbd { display: none; }
-  #minimap { width: 110px; height: 110px; top: auto; bottom: 28px; right: auto; left: 16px; }
+  #minimap { width: 100px; height: 100px; top: auto; bottom: 28px; right: auto; left: 16px; }
   #game .hud { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
   #game .hud .logo { display: none; }
   .hud-stats { gap: 8px; }
   .stat .val { font-size: 14px; }
   #btn-menu kbd { display: none; }
-  #drawer { top: 100px; }
+  #drawer { top: 140px; }
+  #tutorial { top: 150px; }
+  #devpanel { left: 0; right: 0; width: auto; top: 140px; }
+  #banners { top: 140px; }
+  .start-title { font-size: 44px; }
 }
-#loading { position: absolute; inset: 0; z-index: 20; display: grid; place-content: center; text-align: center; gap: 8px; background: var(--bg); }
-#loading .bar { width: 240px; height: 6px; margin: 0 auto; }
-#loading .bar > div { background: var(--orange); }
