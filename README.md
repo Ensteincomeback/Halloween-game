@@ -10,12 +10,16 @@ instead of in the player's face.
 ## Run it
 
 ```bash
-npm start                                   # http://localhost:3000
-npm test                                    # rule tests (node:test, no dependencies)
+npm start                                   # http://localhost:3000 (simulated chain, no dependencies)
+npm install && npm test                     # game rules + on-chain tests (LiteSVM)
+npm run start:local                         # real Solana programs, in-process chain
+npm run solana:setup && npm run start:solana # Solana devnet (see "Running on real Solana")
 SEASON=season/zombie-november.json npm start # same game, Zombie November season
 ```
 
-Requires Node 20+. No npm dependencies. State is saved to `data/state.json` (`DATA_FILE`, `PORT` env vars).
+Requires Node 20+. `npm start` needs no npm packages; the Solana modes and the tests use
+`@solana/web3.js`, `@solana/spl-token` and LiteSVM. State is saved to `data/state.json`
+(`data/state-solana.json` on devnet; `DATA_FILE`, `PORT`, `PUBLIC_URL` env vars).
 
 > **Devnet.** The "chain" is a simulated ledger inside the server (`server/chain.js`):
 > hash-linked blocks plus programs for the token, NFTs, the staking bond, escrow, signed
@@ -90,10 +94,50 @@ character on any device, and it's how the game will know who pays when purchases
   pick the network. Get free devnet SOL at https://faucet.solana.com.
 - No npm packages: wallet discovery is in `public/js/wallet.js`, verification in `server/solana.js`.
 
-In-game $BOO, SOL, deeds and cards still live on the simulated chain. The roadmap is: (1) wallet
-sign-in ✅, (2) $BOO as an SPL token and deeds/cards as Metaplex NFTs on devnet, paid for by the
-linked wallet, (3) custom Anchor programs for the house market, raffles, fee split and monster
-bond, (4) replace `server/chain.js` with a real Solana client.
+## Running on real Solana
+
+| Mode | Command | What it is |
+|---|---|---|
+| Simulated (default) | `npm start` | The built-in simulated chain. No dependencies, no network. |
+| Local chain | `npm install` then `npm run start:local` | Real Solana programs running in-process (LiteSVM). Fresh chain every start. Real wallets can sign; the 🪂 button gives test SOL. |
+| Devnet | `npm install`, `npm run solana:setup`, then `npm run start:solana` | Real Solana devnet through its public RPC (`SOLANA_RPC` to use your own). |
+
+How value moves (`server/onchain/`):
+
+- **$BOO** is a real Token-2022 token: fixed supply (1B, 0 decimals), with its name and symbol
+  stored on the mint. `solana:setup` mints the whole supply into the game vault and removes the mint
+  authority, so no more can ever be created.
+- **Deeds and minted cards are real NFTs** (Token-2022, supply 1, metadata on the mint, no Metaplex
+  needed), minted straight into the owner's linked wallet. If a deed is sold or sent outside the
+  game, Knock follows the on-chain holder within 30 seconds.
+- **Game balances** (the $BOO and SOL you spend in shops, on deeds and in the market) are backed 1:1
+  by the vault. **Deposit**: the server builds the transaction, your wallet signs it, the server
+  checks the signed bytes are exactly what it built, adds its fee-payer signature and sends it (you
+  pay no network fee). Your balance is credited only after it confirms. **Withdraw**: queued and sent
+  by the game; refunded if it can't be sent.
+- **Listing a house / raffling a card NFT** that sits in your wallet first moves it into escrow
+  (one wallet signature). Buyers and raffle winners get the NFT delivered to their wallet.
+- Ledger $BOO burns are mirrored by real burns from the vault. `GET /api/onchain/report` compares
+  the vault's on-chain balances with the ledger.
+- **Crash-safe sending**: every game-sent transaction's signature is saved before it is sent. After
+  a lost confirmation or a restart, the bridge checks the chain before ever sending it again.
+- Keys live in `data/solana-keys.json` (git-ignored; back it up, it controls the vault).
+  `solana:setup` refuses mainnet unless you set `I_UNDERSTAND_MAINNET=yes`. Don't do that before
+  an audit.
+
+### The Knock program (`programs/knock`, Anchor 0.31)
+
+On-chain code for the parts that hold other people's value: the **fee split** (`pay_sol`,
+`pay_boo`), **house market escrow** (`list_nft`, `buy_nft`, `cancel_listing`; seller paid and NFT
+delivered in one transaction), **raffle escrow** (`raffle_deposit`, `raffle_settle`,
+`raffle_refund`) and the **monster bond** (`stake`, `unstake`, time-weighted, and a capped
+`slash`). `npm run test:program` runs its unit tests (fee split, stake weighting, rate limits).
+
+It compiles and its tests pass natively, but it has **not yet been built for or deployed to a
+Solana cluster**. Building needs the Solana/Anchor toolchain (`anchor build`, or Solana Playground at
+beta.solpg.io: paste `programs/knock/src/lib.rs`, build, deploy to devnet, and put the deployed
+program ID into `declare_id!`). Until it's deployed and the server is switched over to it, escrow
+is held by the game's vault key (the bridge above).
 
 ## Dev build
 
@@ -298,12 +342,16 @@ server/monsters.js License, Fright, lairs, monster results, bounties
 server/economy.js  Shop, training, cards, prizes, claims, faucets, missions
 server/raffle.js   Transaction fee router, Town Raffle, prize pool, player raffles
 server/solana.js   Sign in with Solana: challenges, ed25519 verification, wallet links
+server/onchain/    Real-Solana bridge: connection (RPC or LiteSVM), tokens/NFTs, deposits,
+                   withdrawals, escrow, outbox worker, ownership sync, setup
+programs/knock/    Anchor program: fee split, market and raffle escrow, monster bond
+scripts/           solana-setup.js (devnet keys + $BOO mint)
 server/chain.js    Simulated chain: $BOO, SOL, NFTs, stake, escrow, signed claims, anchors
 server/config.js   Season Pack loader (extends + merge)
 server/layout.js   World layout (houses, doors, bank, gates, gatekeepers), shared with the client
 server/dev.js      Dev-build shortcuts (only with DEV=1)
 season/            Season Packs
-test/              Rule tests with a deterministic clock and RNG
+test/              Rule tests (deterministic clock and RNG) and on-chain tests (LiteSVM)
 ```
 
 **On-chain**: token balances, house deeds, card NFTs, the monster bond, marketplace

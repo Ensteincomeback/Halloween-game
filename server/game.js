@@ -18,9 +18,12 @@ export { GameError, buildOdds, rollOutcome, OUTCOMES };
 
 const DIVISIONS = { all: [1, Infinity], novice: [1, 4], regular: [5, 9], veteran: [10, Infinity] };
 
-export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {}, dev: devMode = false, solana = {} }) {
+// `onchain` (optional): { install, conn, authority, vault, booMint, ... } turns on
+// the real-Solana bridge (server/onchain/bridge.js). Without it the game runs
+// entirely on the simulated chain, with no dependencies.
+export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {}, dev: devMode = false, solana = {}, onchain = null }) {
   state.serverSecret ??= crypto.randomBytes(32).toString('hex');
-  const chain = createChain({ state, token: season.token, now, secret: state.serverSecret });
+  const chain = createChain({ state, token: season.token, now, secret: state.serverSecret, solFaucet: !onchain });
   const layout = buildLayout(season);
   const ctx = { season, state, now, rng, chain, changed: onChange, layout };
 
@@ -31,6 +34,13 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
   installEconomy(ctx);
   installRaffle(ctx);
   installSolana(ctx, solana);
+  if (onchain) {
+    onchain.install(ctx, { ...onchain, cluster: solana.cluster || onchain.cluster });
+    // Listing a house or raffling a card NFT that sits in the player's own
+    // wallet first moves it into escrow (a wallet-signed transaction).
+    ctx.registerEscrowFollowUp('listHouse', (p, a) => ctx.listHouse(p, a.houseId, a.price));
+    ctx.registerEscrowFollowUp('createAuction', (p, a) => ctx.createAuction(p, a.opts));
+  }
 
   // Season registry: the active Season Pack's hash is anchored on-chain.
   const hash = seasonHash(season);
@@ -129,7 +139,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       raffle: season.raffle, trophies: season.trophies, fees: { rate: season.fees.rate, split: season.fees.split },
       legendaryRules: { minGapMinutes: season.legendaryEvent.minGapMinutes, maxGapMinutes: season.legendaryEvent.maxGapMinutes, openMinutes: season.legendaryEvent.openMinutes, entryFee: season.legendaryEvent.entryFee },
       houseRules: { visitCandy: season.houses.visitCandy, ownerFeeShare: season.fees.split.houseOwners, marketFee: season.houses.marketFee },
-      layout, travel: season.travel, dev: devMode, solana: ctx.solanaInfo,
+      layout, travel: season.travel, dev: devMode, solana: { ...ctx.solanaInfo, onchain: !!ctx.onchainEnabled, booMint: ctx.state.onchain?.booMint || null },
       npcs: Object.fromEntries(Object.entries(season.npcs).filter(([k]) => !k.startsWith('_'))), statInfo: season.statInfo,
       stats: { windowPerCourageMs: season.scare.windowPerCourageMs, perSneak: season.ambush.perSneak, trapAvoidPerSneak: season.monster.trapAvoidPerSneak },
       outcomes: OUTCOMES, neighborhoods: season.neighborhoods.map(({ id, name, minLevel, unlockCost }) => ({ id, name, minLevel, unlockCost })),
@@ -181,11 +191,22 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
   }
 
   // ---------- public API (token → player) ----------
+  const wrap = (p, result) => ({ ...(result && typeof result === 'object' && !Array.isArray(result) ? result : { result }), player: playerView(p) });
   const withPlayer = (fn) => (token, ...args) => {
     const p = ctx.playerByToken(token);
     const result = fn(p, ...args);
     onChange();
-    return { ...(result && typeof result === 'object' && !Array.isArray(result) ? result : { result }), player: playerView(p) };
+    return wrap(p, result);
+  };
+  const withPlayerAsync = (fn) => async (token, ...args) => {
+    const p = ctx.playerByToken(token);
+    const result = await fn(p, ...args);
+    onChange();
+    return wrap(p, result);
+  };
+  const needOnchain = () => {
+    if (!ctx.onchainEnabled) throw new GameError('This server is running the simulated chain. Start it with CHAIN=solana or CHAIN=local.', 400);
+    return true;
   };
 
   return {
@@ -214,7 +235,28 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     raffle: withPlayer((p, n, free) => ctx.buyRaffle(p, n, !!free)),
     claimRafflePrize: withPlayer((p, id, details) => ctx.claimRafflePrize(p, id, details)),
     auctions: (token) => ctx.auctionsView(token && state.tokens[token] ? ctx.playerByToken(token) : null),
-    createAuction: withPlayer((p, opts) => ctx.createAuction(p, opts)),
+    createAuction: withPlayerAsync(async (p, opts) => {
+      const nftId = opts?.item?.kind === 'nft' && opts.item.nftId;
+      if (ctx.onchainEnabled && nftId && chain.state.nfts[nftId]?.owner === p.wallet && !ctx.nftInCustody(nftId)) {
+        return ctx.prepareNftEscrow(p, nftId, { action: 'createAuction', opts });
+      }
+      return ctx.createAuction(p, opts);
+    }),
+    // ---------- real Solana (CHAIN=solana or local) ----------
+    onchain: withPlayerAsync(async (p) => (ctx.onchainEnabled ? ctx.onchainView(p) : { enabled: false })),
+    deposit: withPlayerAsync((p, currency, amount) => needOnchain() && ctx.prepareDeposit(p, currency === 'SOL' ? 'SOL' : 'BOO', amount)),
+    withdraw: withPlayer((p, currency, amount) => needOnchain() && ctx.withdraw(p, currency === 'SOL' ? 'SOL' : 'BOO', amount)),
+    submitIntent: withPlayerAsync((p, id, tx) => needOnchain() && ctx.submitIntent(p, id, tx)),
+    airdrop: withPlayerAsync((p, sol) => needOnchain() && ctx.airdropToWallet(p, sol)),
+    onchainReport: async () => (ctx.onchainEnabled ? ctx.onchainReport() : { enabled: false }),
+    // Token metadata JSON that on-chain NFTs and $BOO point at (wallets read this).
+    nftMetadata(id) {
+      const n = chain.state.nfts[id];
+      if (!n) throw new GameError('No such NFT', 404);
+      const attrs = Object.entries(n.meta).filter(([k]) => !['mint', 'name'].includes(k)).map(([trait_type, value]) => ({ trait_type, value: String(value) }));
+      return { name: n.meta.name, symbol: 'KNOCK', description: n.kind === 'house' ? `A house deed in Knock (${season.name}). Owners earn from real visitors.` : `A Knock monster card from ${season.name}.`, image: '', attributes: [{ trait_type: 'kind', value: n.kind }, ...attrs] };
+    },
+    tokenMetadata: () => ({ name: season.token.name, symbol: season.token.symbol, description: 'Knock\'s in-game token. Fixed supply.', image: '' }),
     enterAuction: withPlayer((p, id, n) => ctx.enterAuction(p, id, n)),
     cancelAuction: withPlayer((p, id) => ctx.cancelAuction(p, id)),
     solFaucet: withPlayer((p) => ({ received: ctx.solFaucet(p) })),
@@ -233,7 +275,13 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
     setDial: withPlayer((p, houseId, mode) => ctx.setDial(p, Number(houseId), mode)),
     buyLantern: withPlayer((p, houseId) => ctx.buyLantern(p, Number(houseId))),
     claimTill: withPlayer((p, houseId) => ({ claimed: ctx.claimTill(p, Number(houseId)) })),
-    listHouse: withPlayer((p, houseId, price) => ctx.listHouse(p, Number(houseId), price)),
+    listHouse: withPlayerAsync(async (p, houseId, price) => {
+      const h = ctx.house(Number(houseId));
+      if (ctx.onchainEnabled && h.deed && ctx.houseOwner(h)?.id === p.id && !ctx.nftInCustody(h.deed)) {
+        return ctx.prepareNftEscrow(p, h.deed, { action: 'listHouse', houseId: h.id, price });
+      }
+      return ctx.listHouse(p, h.id, price);
+    }),
     cancelListing: withPlayer((p, houseId) => ctx.cancelListing(p, Number(houseId))),
     buyListing: withPlayer((p, houseId) => ctx.buyListing(p, Number(houseId))),
     stake: withPlayer((p, amount) => ctx.stake(p, amount)),

@@ -381,7 +381,7 @@ test('behavior dial changes are timelocked and logged publicly', () => {
   assert.throws(() => env.game.setDial(stranger.token, 4, 'generous'), /do not own/);
 });
 
-test('houses cost SOL: deed sale and SOL market, fee split to owners, prize pool and treasury', () => {
+test('houses cost SOL: deed sale and SOL market, fee split to owners, prize pool and treasury', async () => {
   const env = setup();
   const s = env.login('Seller');
   const b = env.login('Buyer');
@@ -397,7 +397,7 @@ test('houses cost SOL: deed sale and SOL market, fee split to owners, prize pool
   const pricePaidFee = Math.floor(price * season.fees.rate);
   assert.equal(env.ctx.state.fees.totals.SOL.collected, pricePaidFee);
 
-  env.game.listHouse(s.token, 4, 1);
+  await env.game.listHouse(s.token, 4, 1);
   assert.equal(env.game.market()[0].currency, 'SOL');
   const sellerBefore = env.ctx.chain.solBal(s.p.wallet);
   const pools = () => [env.ctx.chain.solBal('pool:owners'), env.ctx.chain.solBal('pool:prizes')];
@@ -586,16 +586,16 @@ test('Town Raffle: rounds draw every 5 minutes, max 100 slots, free daily slot, 
   assert.ok(env.ctx.prizePoolUsd() >= 0);
 });
 
-test('player raffles: escrow the item, sell candy slots, random winner gets it, seller gets candy minus the fee', () => {
+test('player raffles: escrow the item, sell candy slots, random winner gets it, seller gets candy minus the fee', async () => {
   const env = setup({ seed: 7 });
   const s = env.login('Seller');
   veteran(s.p);
   env.ctx.chain.transfer('liquidity', s.p.wallet, 1000, 'test');
   s.p.cards = { c01: 1 };
-  assert.throws(() => env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 7 }), /duration/);
-  const { auction } = env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 15 });
+  await assert.rejects(() => env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 7 }), /duration/);
+  const { auction } = await env.game.createAuction(s.token, { item: { kind: 'card', cardId: 'c01' }, slotPrice: 10, maxSlots: 10, minutes: 15 });
   assert.equal(s.p.cards.c01, 0, 'card is in escrow');
-  const boo = env.game.createAuction(s.token, { item: { kind: 'boo', amount: 300 }, slotPrice: 5, maxSlots: 4, minutes: 5 }).auction;
+  const boo = (await env.game.createAuction(s.token, { item: { kind: 'boo', amount: 300 }, slotPrice: 5, maxSlots: 4, minutes: 5 })).auction;
   assert.equal(env.ctx.chain.bal(s.p.wallet), 700);
   assert.throws(() => env.game.enterAuction(s.token, auction, 1), /own raffle/);
   const a = env.login('A');

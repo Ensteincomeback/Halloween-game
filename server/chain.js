@@ -20,7 +20,9 @@ export class ChainError extends Error {
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-export function createChain({ state, token, now = () => Date.now(), secret }) {
+// With `solFaucet: false` (the real-Solana mode) there is no free SOL: every SOL
+// in the ledger was deposited from a real wallet.
+export function createChain({ state, token, now = () => Date.now(), secret, solFaucet = true }) {
   const c = (state.chain ??= {
     height: 0,
     head: '0'.repeat(64),
@@ -34,8 +36,14 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     anchors: [],
     supply: { total: 0, burned: 0 },
   });
-  // Native SOL balances (lamports). Devnet: the faucet account is pre-funded.
-  c.sol ??= { faucet: 1_000_000 * LAMPORTS };
+  // Native SOL balances (lamports). Simulated mode: the faucet account is pre-funded.
+  c.sol ??= solFaucet ? { faucet: 1_000_000 * LAMPORTS } : {};
+
+  // Listeners for the real-Solana bridge: mints, NFT moves and burns are
+  // mirrored on-chain. Not persisted; the bridge re-subscribes on start.
+  const listeners = { mint: [], nftTransfer: [], burn: [] };
+  const emit = (kind, ...args) => listeners[kind].forEach((fn) => fn(...args));
+  const on = (kind, fn) => listeners[kind].push(fn);
 
   function commit(type, data) {
     const tx = { type, ...data, time: now() };
@@ -76,7 +84,9 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     c.balances[from] -= amt;
     c.supply.total -= amt;
     c.supply.burned += amt;
-    return commit('burn', { from, amt, memo });
+    const block = commit('burn', { from, amt, memo });
+    emit('burn', amt, memo);
+    return block;
   }
 
   // ---------- native SOL ----------
@@ -88,6 +98,19 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     c.sol[to] = solBal(to) + lamports;
     return commit('sol-transfer', { from, to, lamports, memo });
   }
+  // Real-Solana mode: SOL enters the ledger only when it was deposited on-chain,
+  // and leaves it when it is withdrawn on-chain.
+  function mintSol(to, lamports, memo) {
+    if (!Number.isInteger(lamports) || lamports <= 0) throw new ChainError('Amount must be positive');
+    c.sol[to] = solBal(to) + lamports;
+    return commit('sol-deposit', { to, lamports, memo });
+  }
+  function burnSol(from, lamports, memo) {
+    if (solBal(from) < lamports) throw new ChainError('Insufficient SOL');
+    c.sol[from] -= lamports;
+    return commit('sol-withdraw', { from, lamports, memo });
+  }
+
   // Move `amt` of either currency.
   const move = (currency, from, to, amt, memo) => (currency === 'SOL' ? solTransfer(from, to, amt, memo) : transfer(from, to, amt, memo));
   const balOf = (currency, a) => (currency === 'SOL' ? solBal(a) : bal(a));
@@ -143,6 +166,7 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     const id = `${kind}-${c.nextNft++}`;
     c.nfts[id] = { id, kind, owner, meta, history: [{ owner, time: now(), event: 'mint' }] };
     commit('mint', { id, kind, owner, meta });
+    emit('mint', c.nfts[id]);
     return c.nfts[id];
   }
 
@@ -152,6 +176,7 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
     n.owner = to;
     n.history.push({ owner: to, time: now(), event });
     commit('nft-transfer', { id, from, to });
+    emit('nftTransfer', n, from, to, event);
   }
 
   const nftsOf = (owner, kind) => Object.values(c.nfts).filter((n) => n.owner === owner && (!kind || n.kind === kind));
@@ -221,7 +246,7 @@ export function createChain({ state, token, now = () => Date.now(), secret }) {
   }
 
   return {
-    state: c, bal, solBal, solTransfer, move, balOf, transfer, burn, payWithBurn, stake, unstake, slash, stakeOf,
+    state: c, on, bal, solBal, solTransfer, mintSol, burnSol, move, balOf, transfer, burn, payWithBurn, stake, unstake, slash, stakeOf,
     mintNft, transferNft, nftsOf, list, cancel, buy, signClaim, claim, anchor, verify,
     recent: (n = 30) => c.blocks.slice(-n).reverse(),
   };

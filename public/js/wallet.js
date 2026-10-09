@@ -3,8 +3,10 @@
 // Wallets are found through the Wallet Standard (the same discovery the official
 // wallet-adapter uses: Phantom, Solflare, Backpack, and others register
 // themselves), with a fallback for wallets that only inject `window.phantom` /
-// `window.solflare` / `window.backpack`. We only ever ask a wallet to connect
-// and to sign a plain-text message; nothing here builds or sends a transaction.
+// `window.solflare` / `window.backpack`. The wallet is asked to connect, to sign
+// the plain-text sign-in message, and to sign transactions the game server
+// built (deposits, moving an NFT into escrow). The wallet never sends anything
+// itself: the server checks the signed bytes are exactly what it built, then sends.
 
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -80,7 +82,11 @@ export const INSTALL_LINKS = [
   ['Backpack', 'https://backpack.app/download'],
 ];
 
-// Connect and return { name, address, signMessage(text) → Uint8Array, disconnect(), onChange(fn) }.
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+const bytesToB64 = (bytes) => btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''));
+
+// Connect and return { name, address, signMessage(text) → Uint8Array,
+// signTransaction(base64, cluster) → base64, disconnect(), onChange(fn) }.
 export async function connectWallet(entry) {
   if (entry.standard) {
     const w = entry.standard;
@@ -93,6 +99,13 @@ export async function connectWallet(entry) {
       async signMessage(text) {
         const [out] = await w.features['solana:signMessage'].signMessage({ account, message: new TextEncoder().encode(text) });
         return out.signature;
+      },
+      async signTransaction(b64, cluster) {
+        const f = w.features['solana:signTransaction'];
+        if (!f) throw new Error(`${w.name} can't sign transactions here. Try Phantom, Solflare or Backpack.`);
+        const chain = `solana:${cluster}`;
+        const [out] = await f.signTransaction({ account, transaction: b64ToBytes(b64), ...(w.chains?.includes(chain) ? { chain } : {}) });
+        return bytesToB64(out.signedTransaction);
       },
       async disconnect() {
         await w.features['standard:disconnect']?.disconnect().catch(() => {});
@@ -112,6 +125,9 @@ export async function connectWallet(entry) {
     async signMessage(text) {
       const out = await p.signMessage(new TextEncoder().encode(text), 'utf8');
       return out.signature || out;
+    },
+    async signTransaction() {
+      throw new Error(`Update ${entry.name}: signing game transactions needs a wallet that supports the Wallet Standard.`);
     },
     async disconnect() {
       await p.disconnect?.().catch(() => {});
@@ -135,4 +151,4 @@ export async function getSolBalance(rpcUrl, address) {
   return data.result.value / 1e9;
 }
 
-export const explorerUrl = (address, cluster) => `https://explorer.solana.com/address/${address}${cluster === 'mainnet-beta' ? '' : `?cluster=${cluster}`}`;
+export const explorerUrl = (address, cluster) => (cluster === 'localnet' ? null : `https://explorer.solana.com/address/${address}${cluster === 'mainnet-beta' ? '' : `?cluster=${cluster}`}`);

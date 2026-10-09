@@ -392,6 +392,9 @@ export function installHouses(ctx) {
       jackpotsToday: todays.filter((e) => e.detail?.jackpot).length,
       legendariesToday: todays.filter((e) => e.outcome === 'legendary').length,
       owner: owner ? { name: owner.name, isYou: owner.id === p?.id } : null,
+      // Deed sold or sent outside the game: held by a wallet that isn't linked to any player.
+      externalOwner: h.deed && chain.state.nfts[h.deed].owner.startsWith('ext:') ? chain.state.nfts[h.deed].owner.slice(4) : null,
+      deedMint: h.deed ? chain.state.nfts[h.deed].meta.mint || null : null,
       plot: !!h.plot, forSale: !!h.plot && !h.deed, knockable: ctx.knockable(h),
       price: h.plot && !h.deed ? ht.solPrice : null,
       listing: listing ? { price: toSol(listing.price), currency: listing.currency || 'BOO' } : null,

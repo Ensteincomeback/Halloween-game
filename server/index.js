@@ -1,4 +1,8 @@
-// HTTP server: JSON API + static client. No dependencies.
+// HTTP server: JSON API + static client.
+//
+// CHAIN=sim (default)  simulated chain, no dependencies
+// CHAIN=solana         real Solana (devnet by default); run `npm run solana:setup` first
+// CHAIN=local          real Solana programs in-process (LiteSVM); a fresh chain every start
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -11,18 +15,50 @@ import { createStore } from './store.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const seasonFile = process.env.SEASON || path.join(root, 'season', 'halloween-2026.json');
-const dataFile = process.env.DATA_FILE || path.join(root, 'data', 'state.json');
+const CHAIN = String(process.env.CHAIN || 'sim').trim().toLowerCase();
+if (!['sim', 'solana', 'local'].includes(CHAIN)) throw new Error(`CHAIN must be sim, solana or local (got "${CHAIN}")`);
+// Each chain mode keeps its own save file: game state points at real accounts.
+const dataFile = process.env.DATA_FILE || path.join(root, 'data', CHAIN === 'sim' ? 'state.json' : `state-${CHAIN}.json`);
 const port = Number(process.env.PORT) || 3000;
+const publicUrl = (process.env.PUBLIC_URL || `http://localhost:${port}`).replace(/\/$/, '');
 
 const season = loadSeason(seasonFile);
+// The local chain lives in memory, so its game state can't outlive it.
+if (CHAIN === 'local' && fs.existsSync(dataFile)) fs.rmSync(dataFile);
 const store = createStore(dataFile);
 // Dev build: `npm run dev`, `node server/index.js --dev`, or DEV=1. On Windows,
 // `set DEV=1 && node ...` stores "1 " with a trailing space, so trim it.
 const DEV = process.argv.includes('--dev') || ['1', 'true', 'yes', 'on'].includes(String(process.env.DEV ?? '').trim().toLowerCase());
 // Which Solana cluster player wallets sign in for, and the RPC the client reads balances from.
-const SOLANA_CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
-const SOLANA_RPC = process.env.SOLANA_RPC || `https://api.${SOLANA_CLUSTER}.solana.com`;
-const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV, solana: { cluster: SOLANA_CLUSTER, rpcUrl: SOLANA_RPC } });
+const solanaConfigFile = path.join(root, 'data', 'solana.json');
+const solanaConfig = CHAIN === 'solana' && fs.existsSync(solanaConfigFile) ? JSON.parse(fs.readFileSync(solanaConfigFile, 'utf8')) : {};
+const SOLANA_CLUSTER = CHAIN === 'local' ? 'localnet' : process.env.SOLANA_CLUSTER || solanaConfig.cluster || 'devnet';
+const SOLANA_RPC = CHAIN === 'local' ? null : process.env.SOLANA_RPC || solanaConfig.rpcUrl || `https://api.${SOLANA_CLUSTER}.solana.com`;
+
+// Real-Solana modes load the bridge (and its npm packages) only when asked for.
+let onchain = null;
+if (CHAIN !== 'sim') {
+  const { installBridge } = await import('./onchain/bridge.js');
+  const { loadOrCreateKeys, setupChain } = await import('./onchain/setup.js');
+  const conn = await (async () => {
+    const mod = await import('./onchain/connection.js');
+    if (CHAIN === 'solana') return mod.createRpcConnection(SOLANA_RPC);
+    const { LiteSVM } = await import('litesvm');
+    return mod.createLiteSvmConnection(new LiteSVM());
+  })();
+  const keys = loadOrCreateKeys(path.join(root, 'data', CHAIN === 'solana' ? 'solana-keys.json' : 'local-keys.json'));
+  let booMint = solanaConfig.booMint;
+  if (CHAIN === 'local') {
+    await conn.airdrop(keys.authority.publicKey, 1_000 * 1e9);
+    ({ booMint } = await setupChain(conn, { ...keys, supply: season.token.totalSupply, publicUrl }));
+  } else if (!booMint) {
+    console.error('No $BOO mint yet. Run `npm run solana:setup` first (it creates data/solana.json).');
+    process.exit(1);
+  }
+  onchain = { install: installBridge, conn, ...keys, booMint, publicUrl };
+}
+
+const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV, solana: { cluster: SOLANA_CLUSTER, rpcUrl: SOLANA_RPC }, onchain });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const publicDir = path.join(root, 'public');
@@ -91,6 +127,14 @@ const routes = {
   'POST /api/auction/enter': (t, b) => game.enterAuction(t, b.id, b.slots),
   'POST /api/auction/cancel': (t, b) => game.cancelAuction(t, b.id),
   'POST /api/sol-faucet': (t) => game.solFaucet(t),
+  // Real Solana (CHAIN=solana / local)
+  'GET /api/onchain': (t) => game.onchain(t),
+  'GET /api/onchain/report': () => game.onchainReport(),
+  'POST /api/onchain/deposit': (t, b) => game.deposit(t, b.currency, b.amount),
+  'POST /api/onchain/withdraw': (t, b) => game.withdraw(t, b.currency, b.amount),
+  'POST /api/onchain/submit': (t, b) => game.submitIntent(t, b.intent, b.transaction),
+  'POST /api/onchain/airdrop': (t, b) => game.airdrop(t, b.sol),
+  'GET /api/token/boo.json': () => game.tokenMetadata(),
   'POST /api/craft': (t, b) => game.craft(t, b.cardId),
   'POST /api/mint-card': (t, b) => game.mintCard(t, b.cardId),
   'POST /api/prize': (t, b) => game.redeemPrize(t, b.prizeId),
@@ -124,10 +168,12 @@ async function handleApi(req, res, url) {
   const houseMatch = url.pathname.match(/^\/api\/house\/(\d+)$/);
   try {
     if (req.method === 'GET' && houseMatch) return send(res, 200, game.house(houseMatch[1], token));
+    const nftMatch = url.pathname.match(/^\/api\/nft\/([\w-]+)\.json$/);
+    if (req.method === 'GET' && nftMatch) return send(res, 200, game.nftMetadata(nftMatch[1]));
     const handler = routes[`${req.method} ${url.pathname}`];
     if (!handler) return send(res, 404, { error: 'Not found' });
     const body = req.method === 'POST' ? await readBody(req) : {};
-    send(res, 200, handler(token, body, req, url));
+    send(res, 200, await handler(token, body, req, url));
   } catch (err) {
     if (err instanceof GameError || err instanceof ChainError) return send(res, err.status, { error: err.message });
     console.error(err);
@@ -171,6 +217,17 @@ setInterval(() => {
 server.listen(port, () => {
   console.log(`🎃 Knock is running at http://localhost:${port}${DEV ? '  [DEV BUILD: dev panel enabled]' : ''}`);
 });
+
+// Real Solana: the outbox worker sends withdrawals, NFT mints and deliveries,
+// and burns; ownership is re-synced with the chain every 30 seconds.
+if (onchain) {
+  const ctx = game._ctx;
+  const safely = (fn) => () => fn().catch((err) => console.error('[onchain]', err.message));
+  await safely(ctx.reconcileOnchain)();
+  setInterval(safely(ctx.processOutbox), 3000).unref();
+  setInterval(safely(ctx.syncNftOwners), 30_000).unref();
+  console.log(`⛓  ${CHAIN === 'local' ? 'Local Solana chain (LiteSVM, in memory)' : `Solana ${SOLANA_CLUSTER} via ${SOLANA_RPC}`} · $${season.token.symbol} mint ${onchain.booMint} · vault ${ctx.onchainKeys.vault}`);
+}
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {

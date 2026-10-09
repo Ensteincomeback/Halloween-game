@@ -128,6 +128,7 @@ export function installSolana(ctx, { cluster = 'devnet', rpcUrl = 'https://api.d
     if (p.solana && p.solana.address !== address) delete state.solanaLinks[p.solana.address];
     state.solanaLinks[address] = p.id;
     p.solana = { address, wallet: String(walletName || 'Wallet').slice(0, 30), linkedAt: now() };
+    ctx.onWalletLinked?.(p);
   }
 
   // Logged in → link the wallet to this character.

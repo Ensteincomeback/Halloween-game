@@ -189,6 +189,7 @@ export function installEconomy(ctx) {
 
   // Devnet only: free test SOL (houses are bought with SOL).
   ctx.solFaucet = (p) => {
+    if (ctx.onchainEnabled) throw new GameError('Real SOL now: get devnet SOL at faucet.solana.com, then use Deposit.');
     const d = ctx.today();
     if (p.solFaucetDay === d) throw new GameError('Devnet SOL faucet: once a day');
     p.solFaucetDay = d;

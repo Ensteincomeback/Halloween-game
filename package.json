@@ -1,13 +1,28 @@
 {
   "name": "knock",
   "version": "0.1.0",
-  "description": "Knock: a pixel-art trick-or-treat game. Knock on doors, collect candy, survive monsters.",
+  "description": "Knock: a pixel-art trick-or-treat game on Solana. Knock on doors, collect candy, survive monsters.",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js --dev",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "start:solana": "CHAIN=solana node server/index.js",
+    "start:local": "CHAIN=local node server/index.js --dev",
+    "solana:setup": "node scripts/solana-setup.js",
+    "test:program": "cargo test -p knock"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.15",
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "^1.99.0"
+  },
+  "devDependencies": {
+    "@solana/kit": "^8.4.0",
+    "litesvm": "1.5"
   }
 }

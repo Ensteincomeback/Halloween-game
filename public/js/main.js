@@ -118,7 +118,9 @@ async function refreshSolBalance() {
   const sol = S.player?.solana;
   if (!sol) return;
   try {
-    S.solBalance = { address: sol.address, sol: await getSolBalance(S.catalog.solana.rpcUrl, sol.address) };
+    // With the real-Solana bridge on, the server reads the chain (works for the local chain too).
+    const bal = onchainOn() && S.token ? (await api('onchain')).wallet?.sol : await getSolBalance(S.catalog.solana.rpcUrl, sol.address);
+    S.solBalance = { address: sol.address, sol: bal ?? null };
   } catch {
     S.solBalance = { address: sol.address, sol: null };
   }
@@ -210,6 +212,103 @@ async function unlinkWallet() {
     else showSettings();
   } catch (err) {
     toast(err.message);
+  }
+}
+
+// ---------- real Solana: wallet-signed transactions, deposits, withdrawals ----------
+const onchainOn = () => !!S.catalog?.solana?.onchain;
+function addrLink(addr, label = `◎ ${shortAddr(addr)}`, cls = 'mono') {
+  const url = explorerUrl(addr, cluster());
+  return url ? `<a class="${cls}" href="${url}" target="_blank" rel="noopener" title="View on Solana Explorer">${label}</a>` : `<span class="${cls}" title="${esc(addr)}">${label}</span>`;
+}
+
+// Reconnect to the linked wallet (after a reload the page has no live connection).
+async function ensureWallet() {
+  const want = S.player?.solana?.address;
+  if (!want) throw new Error('Connect your Solana wallet first (Settings → Solana wallet).');
+  if (S.walletConn?.address === want && S.walletConn.signTransaction) return S.walletConn;
+  const wallets = listWallets();
+  const entry = wallets.find((w) => w.name === S.player.solana.wallet) || wallets[0];
+  if (!entry) throw new Error('No Solana wallet found in this browser.');
+  const w = await connectWallet(entry);
+  if (w.address !== want) throw new Error(`Switch ${w.name} to your linked account ${shortAddr(want)} and try again.`);
+  S.walletConn?.off?.();
+  S.walletConn = { ...w, off: w.onChange(() => (S.walletConn = null)) };
+  return S.walletConn;
+}
+
+// The server built a transaction: the wallet signs it, the server checks it's
+// unchanged and sends it. Anything without a transaction passes straight through.
+async function runIntent(r) {
+  if (!r?.transaction) return r;
+  const w = await ensureWallet();
+  toast(`✍️ Approve in ${w.name}: ${r.summary}`, 8000);
+  let signed;
+  try {
+    signed = await w.signTransaction(r.transaction, r.cluster || cluster());
+  } catch (err) {
+    throw new Error(/reject|denied|cancel/i.test(err.message) ? 'Cancelled in the wallet.' : err.message);
+  }
+  toast('⛓ Sending to Solana…', 10000);
+  const out = await api('onchain/submit', { intent: r.intent, transaction: signed });
+  toast('✅ Confirmed on Solana', 3500);
+  return out;
+}
+
+const opLabel = (o) => ({
+  withdraw: `⬆ Withdraw ${o.amount} ${o.currency === 'SOL' ? 'SOL' : `$${sym()}`}`,
+  mintNft: '✨ Minting an NFT', sendNft: '📦 Delivering an NFT', burn: `🔥 Burning $${sym()}`,
+})[o.kind] || o.kind;
+
+async function showChainWallet() {
+  if (!onchainOn()) return;
+  let v;
+  try {
+    v = await api('onchain');
+  } catch (err) {
+    return toast(err.message);
+  }
+  const w = v.wallet;
+  showModal(`<h2>◎ Wallet &amp; chain</h2>
+    <p class="muted small">Solana <b>${esc(cluster())}</b> · $${sym()} token ${addrLink(v.booMint)}</p>
+    <div class="statcard">
+      <div class="row"><span>Game balance</span><b>${v.game.boo} $${sym()} · ${v.game.sol} SOL</b></div>
+      ${w ? `<div class="row"><span>Your wallet ${addrLink(w.address)}</span><b>${w.boo} $${sym()} · ${w.sol} SOL</b></div>` : ''}
+    </div>
+    ${w ? `<h4>Move funds</h4>
+      <div class="auction-form">
+        <label>Currency <select id="cw-cur" class="inp"><option value="SOL">SOL</option><option value="BOO">$${sym()}</option></select></label>
+        <label>Amount <input id="cw-amt" type="number" min="0" step="0.01" value="0.5"></label>
+        <button class="btn small primary" id="cw-dep">⬇ Deposit to game</button>
+        <button class="btn small" id="cw-wd">⬆ Withdraw to wallet</button>
+      </div>
+      <p class="muted small">Deposits: your wallet signs and Knock pays the network fee. Withdrawals are sent by the game and land in seconds. Houses are bought with your game SOL.</p>
+      ${cluster() !== 'mainnet-beta' ? '<button class="btn small" id="cw-air">🪂 Get 2 test SOL in my wallet</button>' : ''}`
+    : '<p>Link a Solana wallet in Settings to deposit, withdraw and receive your NFTs.</p>'}
+    <h4>Your NFTs</h4>
+    ${v.nfts.length ? `<div class="list">${v.nfts.map((n) => `<div class="item small"><span>${n.kind === 'house' ? '🏠' : '🃏'} ${esc(n.name)}</span>
+      <span class="muted small">${n.mint ? `${n.inWallet ? 'in your wallet' : 'held by Knock'} · ${addrLink(n.mint, 'view')}` : 'minting…'}</span></div>`).join('')}</div>`
+      : '<p class="muted small">None yet. House deeds and minted Epic/Legendary cards become real NFTs in your wallet.</p>'}
+    ${v.pending.length ? `<h4>On the way</h4><div class="list">${v.pending.map((o) => `<div class="item small"><span>${opLabel(o)}</span><span class="muted small">${esc(o.status)}${o.error ? `: ${esc(o.error)}` : ''}</span></div>`).join('')}</div>` : ''}
+    <div class="actions"><button class="btn" id="cw-refresh">↻ Refresh</button><button class="btn primary" data-close>Close</button></div>`, { wide: true });
+  const amount = () => ({ currency: $('#cw-cur').value, amount: Number($('#cw-amt').value) });
+  const run = (fn) => async () => {
+    try {
+      await fn();
+      await reloadHouse();
+      showChainWallet();
+    } catch (err) {
+      toast(err.message, 6000);
+    }
+  };
+  $('#cw-refresh').onclick = run(async () => {});
+  if (w) {
+    $('#cw-dep').onclick = run(async () => runIntent(await api('onchain/deposit', amount())));
+    $('#cw-wd').onclick = run(async () => {
+      await api('onchain/withdraw', amount());
+      toast('⬆ Withdrawal queued. It lands in your wallet in a few seconds.', 5000);
+    });
+    if ($('#cw-air')) $('#cw-air').onclick = run(async () => toast(`🪂 +${(await api('onchain/airdrop', { sol: 2 })).airdropped} test SOL in your wallet`));
   }
 }
 
@@ -818,8 +917,10 @@ function renderPorch() {
     </div>` : h.secret ? '' : `
     <div class="section"><h3>Deed</h3>
       ${h.owner ? `<p class="small">Owned by <b>${esc(h.owner.name)}</b>. Value ≈ ${h.value} SOL.</p>` : ''}
-      ${h.price ? `<button class="btn small primary" data-act="deed" ${(p.wallet?.sol ?? 0) >= h.price ? '' : 'disabled'}>Buy deed · ${h.price} SOL</button>
-        <p class="muted small">Houses are bought with SOL (you have ${p.wallet?.sol ?? 0}). Owners earn candy from visitors and a share of transaction fees.</p>` : ''}
+      ${h.price ? `<button class="btn small primary" data-act="deed" ${(p.wallet?.sol ?? 0) >= h.price || (onchainOn() && p.solana) ? '' : 'disabled'}>Buy deed · ${h.price} SOL</button>
+        <p class="muted small">Houses are bought with SOL (game balance: ${p.wallet?.sol ?? 0}).${onchainOn() ? ' The deed is minted as a real NFT into your wallet.' : ''} Owners earn candy from visitors and a share of transaction fees.</p>` : ''}
+      ${h.deedMint ? `<p class="muted small">Deed NFT: ${addrLink(h.deedMint)}</p>` : ''}
+      ${h.externalOwner ? `<p class="muted small">This deed was sold outside Knock and is held by ${addrLink(h.externalOwner)}.</p>` : ''}
       ${h.listing ? `<button class="btn small primary" data-act="buylisting">Buy from market · ${h.listing.price} ${h.listing.currency === 'SOL' ? 'SOL' : `$${sym()}`}</button>` : ''}
     </div>`;
   const m = p.monster;
@@ -1131,6 +1232,7 @@ function renderBag() {
       ${cell('✊', p.knocks, 'knocks')}
     </div>
     ${w ? '' : '<p class="muted small">Your wallet ($BOO and SOL) shows up once you have played a while.</p>'}
+    ${onchainOn() && w ? `<div class="row-actions"><button class="btn small primary" data-act="chainwallet">◎ Wallet &amp; chain: deposit, withdraw, NFTs</button></div>` : ''}
 
     <h3 class="section">Costumes <span class="muted small">(${costumes.length}/${Object.keys(c.costumes).length})</span></h3>
     <div class="inv-grid">${costumes.map(([id, k]) => `<div class="inv-cell ${p.costume === id ? 'on' : ''}"><span class="inv-icon">${k.icon}</span><span class="inv-name">${esc(k.name)}</span>
@@ -1277,7 +1379,7 @@ async function renderStreets() {
     <h3>Wallet</h3>
     <div class="statcard">
       <div class="row"><span>Game wallet</span><span class="mono">${esc(w.address.slice(0, 14))}…</span></div>
-      <div class="row"><span>Your Solana wallet</span>${p.solana ? `<a class="mono" href="${explorerUrl(p.solana.address, cluster())}" target="_blank" rel="noopener">◎ ${shortAddr(p.solana.address)}</a>` : '<span class="muted">not linked (Settings)</span>'}</div>
+      <div class="row"><span>Your Solana wallet</span>${p.solana ? addrLink(p.solana.address) : '<span class="muted">not linked (Settings)</span>'}</div>
       <div class="row"><span>$${sym()}</span><b>${w.boo}</b></div>
       <div class="row"><span>SOL</span><b>${w.sol}</b></div>
       <div class="row"><span>Claimable</span><b>${w.claimable}</b></div>
@@ -1286,9 +1388,9 @@ async function renderStreets() {
     <div class="row-actions">
       <button class="btn small primary" data-act="claim" ${w.claimable ? '' : 'disabled'}>Claim ${w.claimable} $${sym()}</button>
       <button class="btn small" data-act="faucet" ${w.faucetUsedToday ? 'disabled' : ''}>Get devnet $${sym()}</button>
-      <button class="btn small" data-act="solfaucet" ${w.solFaucetUsedToday ? 'disabled' : ''}>Get devnet SOL</button>
+      ${onchainOn() ? '<button class="btn small primary" data-act="chainwallet">◎ Deposit / withdraw</button>' : `<button class="btn small" data-act="solfaucet" ${w.solFaucetUsedToday ? 'disabled' : ''}>Get devnet SOL</button>`}
     </div>
-    <p class="muted small">$${sym()} and SOL in the game wallet are still test currency on a simulated chain. Houses are bought and sold in SOL. Next update: these move onto Solana ${esc(cluster())} and your linked wallet pays for them.</p>
+    <p class="muted small">${onchainOn() ? `Live on Solana ${esc(cluster())}: game balances are backed 1:1 by the game vault. Deposit from and withdraw to your own wallet; deeds and minted cards are real NFTs.` : `$${sym()} and SOL here are test currency on a simulated chain. Houses are bought and sold in SOL.`}</p>
 
     <h3 class="section">Become a monster</h3>
     ${m.type ? `
@@ -1362,17 +1464,32 @@ const actions = {
   till: async () => toast(`Collected ${(await api('deed/till', { houseId: S.selected })).claimed} 🍬`),
   lantern: async () => (await api('deed/lantern', { houseId: S.selected }), toast('🏮 Lantern upgraded')),
   dial: async () => (await api('deed/dial', { houseId: S.selected, mode: $('#dial').value }), toast('Behavior change scheduled. It takes 24h.')),
-  list: async () => (await api('market/list', { houseId: S.selected, price: Number($('#list-price').value) }), toast('Listed')),
+  list: async () => {
+    // On-chain: the deed NFT moves from the wallet into escrow first (wallet-signed).
+    await runIntent(await api('market/list', { houseId: S.selected, price: Number($('#list-price').value) }));
+    toast('🏷️ Listed');
+  },
   delist: async () => api('market/cancel', { houseId: S.selected }),
-  deed: async () => (await api('deed/buy', { houseId: S.selected }), toast('🏠 You own this house now!')),
+  deed: async () => {
+    const h = S.houseDetail;
+    const have = S.player.wallet?.sol ?? 0;
+    if (onchainOn() && have < h.price) {
+      const need = Math.ceil((h.price - have) * 1000) / 1000;
+      if (!confirm(`This deed costs ${h.price} SOL and your game balance is ${have} SOL.\nDeposit ${need} SOL from your wallet now?`)) return;
+      await runIntent(await api('onchain/deposit', { currency: 'SOL', amount: need }));
+    }
+    await api('deed/buy', { houseId: S.selected });
+    toast(onchainOn() ? '🏠 You own this house! Its deed NFT is being minted to your wallet.' : '🏠 You own this house now!', 5000);
+  },
   buylisting: async () => (await api('market/buy', { houseId: S.selected }), toast('🏠 Bought!')),
   'lair-ambush': async () => (await api('monster/lair', { houseId: S.selected, kind: 'ambush' }), toast('🧟 Ambush set. Now wait in the bushes...')),
   'lair-trap': async () => (await api('monster/lair', { houseId: S.selected, kind: 'trap' }), toast('🪤 Trap set.')),
   solfaucet: async () => toast(`+${(await api('sol-faucet', {})).received} devnet SOL`),
+  chainwallet: async () => showChainWallet(),
   'auction-create': async () => {
     const [kind, id] = $('#au-item').value.split(':');
     const item = kind === 'boo' ? { kind, amount: Number($('#au-amount').value) } : kind === 'card' ? { kind, cardId: id } : { kind, nftId: id };
-    await api('auction/create', { item, slotPrice: Number($('#au-price').value), maxSlots: Number($('#au-slots').value), minutes: Number($('#au-mins').value) });
+    await runIntent(await api('auction/create', { item, slotPrice: Number($('#au-price').value), maxSlots: Number($('#au-slots').value), minutes: Number($('#au-mins').value) }));
     await loadAuctions();
     toast('🎟️ Your raffle is live!');
   },
@@ -1728,7 +1845,7 @@ function showSettings() {
       <div class="setting-row"><span>Tutorial</span><button class="btn small" id="set-tutorial">🎓 Replay</button></div>
       <div class="setting-row"><span>How to play</span><button class="btn small" id="set-help">❔ Open</button></div>
       <div class="setting-row"><span>Solana wallet</span>${S.player.solana
-        ? `<span class="row-actions" style="margin:0"><a class="btn small" href="${explorerUrl(S.player.solana.address, cluster())}" target="_blank" rel="noopener" title="View on Solana Explorer">◎ ${shortAddr(S.player.solana.address)}</a><button class="btn small" id="set-unlink">Unlink</button></span>`
+        ? `<span class="row-actions" style="margin:0">${addrLink(S.player.solana.address, `◎ ${shortAddr(S.player.solana.address)}`, 'btn small')}${onchainOn() ? '<button class="btn small" data-act="chainwallet">Funds</button>' : ''}<button class="btn small" id="set-unlink">Unlink</button></span>`
         : '<button class="btn small wallet-btn" id="set-wallet">◎ Connect</button>'}</div>
       ${S.catalog.dev ? '<div class="setting-row"><span>Dev panel</span><button class="btn small dev-btn" id="set-dev">DEV</button></div>' : ''}
     </div>
