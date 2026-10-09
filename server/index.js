@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGame, GameError } from './game.js';
+import { ChainError } from './chain.js';
+import { loadSeason } from './config.js';
 import { createStore } from './store.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,11 +14,14 @@ const seasonFile = process.env.SEASON || path.join(root, 'season', 'halloween-20
 const dataFile = process.env.DATA_FILE || path.join(root, 'data', 'state.json');
 const port = Number(process.env.PORT) || 3000;
 
-const season = JSON.parse(fs.readFileSync(seasonFile, 'utf8'));
+const season = loadSeason(seasonFile);
 const store = createStore(dataFile);
-const game = createGame({ season, state: store.state, onChange: store.changed });
+// Dev build: `npm run dev`, `node server/index.js --dev`, or DEV=1. On Windows,
+// `set DEV=1 && node ...` stores "1 " with a trailing space, so trim it.
+const DEV = process.argv.includes('--dev') || ['1', 'true', 'yes', 'on'].includes(String(process.env.DEV ?? '').trim().toLowerCase());
+const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV });
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const publicDir = path.join(root, 'public');
 
 function readBody(req) {
@@ -56,33 +61,69 @@ function rateLimited(ip) {
 }
 
 const routes = {
-  'POST /api/login': (_, body) => game.login(body.name),
-  'GET /api/me': (tok) => game.me(tok),
-  'GET /api/world': () => game.worldView(),
+  'POST /api/login': (_, b, req) => game.login(b.name, req.socket.remoteAddress),
+  'GET /api/me': (t) => game.me(t),
+  'GET /api/world': (t) => game.world(t),
   'GET /api/catalog': () => game.catalog(),
-  'GET /api/leaderboard': () => game.leaderboards(),
+  'GET /api/leaderboard': (t, b, req, url) => game.leaderboards(url.searchParams.get('division') || 'all'),
   'GET /api/feed': () => game.feed(),
-  'POST /api/knock': (tok, body) => game.knock(tok, Number(body.houseId), body.gesture),
-  'POST /api/scare': (tok, body) => game.resolveScare(tok, body.id),
-  'POST /api/ambush': (tok, body) => game.resolveAmbush(tok, body.id, body.counter),
-  'POST /api/bank': (tok) => game.bank(tok),
-  'POST /api/buy': (tok, body) => game.buy(tok, body.kind, body.itemId),
-  'POST /api/equip': (tok, body) => game.equip(tok, body.costumeId),
-  'POST /api/mission': (tok, body) => game.claimMission(tok, body.missionId),
+  'GET /api/market': () => game.market(),
+  'GET /api/economy': () => game.economy(),
+  'GET /api/chain': () => game.chain(),
+  'POST /api/knock': (t, b) => game.knock(t, b.houseId, b.gesture),
+  'POST /api/scare': (t, b) => game.resolveScare(t, b.id),
+  'POST /api/ambush': (t, b) => game.resolveAmbush(t, b.id, b.counter, b.bribe),
+  'POST /api/bank': (t, b) => game.bank(t, b.pos),
+  'POST /api/buy': (t, b) => game.buy(t, b.kind, b.itemId),
+  'POST /api/equip': (t, b) => game.equip(t, b.costumeId),
+  'POST /api/train': (t, b) => game.train(t, b.stat),
+  'POST /api/unlock': (t, b) => game.unlock(t, b.neighborhood, b.pos),
+  'POST /api/raffle': (t, b) => game.raffle(t, b.slots, b.free),
+  'POST /api/raffle/claim': (t, b) => game.claimRafflePrize(t, b.id, b.details),
+  'GET /api/auctions': (t) => game.auctions(t),
+  'POST /api/auction/create': (t, b) => game.createAuction(t, { item: b.item, slotPrice: b.slotPrice, maxSlots: b.maxSlots, minutes: b.minutes }),
+  'POST /api/auction/enter': (t, b) => game.enterAuction(t, b.id, b.slots),
+  'POST /api/auction/cancel': (t, b) => game.cancelAuction(t, b.id),
+  'POST /api/sol-faucet': (t) => game.solFaucet(t),
+  'POST /api/craft': (t, b) => game.craft(t, b.cardId),
+  'POST /api/mint-card': (t, b) => game.mintCard(t, b.cardId),
+  'POST /api/prize': (t, b) => game.redeemPrize(t, b.prizeId),
+  'POST /api/npc/accept': (t, b) => game.acceptMission(t, b.giver, b.pos),
+  'POST /api/npc/claim': (t, b) => game.claimMission(t, b.giver, b.pos),
+  'POST /api/claim': (t) => game.claimBoo(t),
+  'POST /api/faucet': (t) => game.faucet(t),
+  'POST /api/deed/buy': (t, b) => game.buyDeed(t, b.houseId),
+  'POST /api/deed/dial': (t, b) => game.setDial(t, b.houseId, b.mode),
+  'POST /api/deed/lantern': (t, b) => game.buyLantern(t, b.houseId),
+  'POST /api/deed/till': (t, b) => game.claimTill(t, b.houseId),
+  'POST /api/market/list': (t, b) => game.listHouse(t, b.houseId, b.price),
+  'POST /api/market/cancel': (t, b) => game.cancelListing(t, b.houseId),
+  'POST /api/market/buy': (t, b) => game.buyListing(t, b.houseId),
+  'POST /api/monster/stake': (t, b) => game.stake(t, b.amount),
+  'POST /api/monster/unstake': (t, b) => game.unstake(t, b.amount),
+  'POST /api/monster/become': (t, b) => game.becomeMonster(t, b.type),
+  'POST /api/monster/lair': (t, b) => game.setLair(t, b.houseId, b.kind),
+  'POST /api/monster/claim': (t) => game.claimMonsterBoo(t),
+  'POST /api/bounty': (t, b) => game.postBounty(t, b.monster, b.amount),
 };
+
+// Dev build: /api/dev/<action> with { args: [...] } calls game.dev[action](token, ...args).
+if (DEV) {
+  for (const name of Object.keys(game.dev)) routes[`POST /api/dev/${name}`] = (t, b) => game.dev[name](t, ...(Array.isArray(b.args) ? b.args : []));
+}
 
 async function handleApi(req, res, url) {
   if (rateLimited(req.socket.remoteAddress)) return send(res, 429, { error: 'Too many requests' });
   const token = (req.headers.authorization || '').replace(/^Bearer /, '');
   const houseMatch = url.pathname.match(/^\/api\/house\/(\d+)$/);
   try {
-    if (req.method === 'GET' && houseMatch) return send(res, 200, game.house(Number(houseMatch[1])));
+    if (req.method === 'GET' && houseMatch) return send(res, 200, game.house(houseMatch[1], token));
     const handler = routes[`${req.method} ${url.pathname}`];
     if (!handler) return send(res, 404, { error: 'Not found' });
     const body = req.method === 'POST' ? await readBody(req) : {};
-    send(res, 200, handler(token, body));
+    send(res, 200, handler(token, body, req, url));
   } catch (err) {
-    if (err instanceof GameError) return send(res, err.status, { error: err.message });
+    if (err instanceof GameError || err instanceof ChainError) return send(res, err.status, { error: err.message });
     console.error(err);
     send(res, 500, { error: 'Server error' });
   }
@@ -111,8 +152,18 @@ const server = http.createServer((req, res) => {
   serveStatic(res, url);
 });
 
+// The world clock runs even when nobody is polling: the Legendary Mansion
+// schedule, Town Raffle draws and player raffles all settle here.
+setInterval(() => {
+  try {
+    game.tick();
+  } catch (err) {
+    console.error(err);
+  }
+}, 2000).unref();
+
 server.listen(port, () => {
-  console.log(`🎃 Knock is running at http://localhost:${port}`);
+  console.log(`🎃 Knock is running at http://localhost:${port}${DEV ? '  [DEV BUILD: dev panel enabled]' : ''}`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

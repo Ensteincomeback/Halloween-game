@@ -1,12 +1,13 @@
 {
   "name": "knock",
   "version": "0.1.0",
-  "description": "Knock: a trick-or-treat game. Season 0 off-chain MVP.",
+  "description": "Knock: a pixel-art trick-or-treat game. Knock on doors, collect candy, survive monsters.",
   "type": "module",
   "private": true,
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/index.js",
+    "dev": "node server/index.js --dev",
     "test": "node --test test/*.test.js"
   }
 }
