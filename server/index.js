@@ -19,7 +19,10 @@ const store = createStore(dataFile);
 // Dev build: `npm run dev`, `node server/index.js --dev`, or DEV=1. On Windows,
 // `set DEV=1 && node ...` stores "1 " with a trailing space, so trim it.
 const DEV = process.argv.includes('--dev') || ['1', 'true', 'yes', 'on'].includes(String(process.env.DEV ?? '').trim().toLowerCase());
-const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV });
+// Which Solana cluster player wallets sign in for, and the RPC the client reads balances from.
+const SOLANA_CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
+const SOLANA_RPC = process.env.SOLANA_RPC || `https://api.${SOLANA_CLUSTER}.solana.com`;
+const game = createGame({ season, state: store.state, onChange: store.changed, dev: DEV, solana: { cluster: SOLANA_CLUSTER, rpcUrl: SOLANA_RPC } });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const publicDir = path.join(root, 'public');
@@ -62,6 +65,9 @@ function rateLimited(ip) {
 
 const routes = {
   'POST /api/login': (_, b, req) => game.login(b.name, req.socket.remoteAddress),
+  'POST /api/wallet/challenge': (_, b, req) => game.walletChallenge(b.address, req.headers.host),
+  'POST /api/wallet/verify': (t, b, req) => game.walletVerify(t, { nonce: b.nonce, signature: b.signature, walletName: b.walletName, name: b.name }, req.socket.remoteAddress),
+  'POST /api/wallet/unlink': (t) => game.walletUnlink(t),
   'GET /api/me': (t) => game.me(t),
   'GET /api/world': (t) => game.world(t),
   'GET /api/catalog': () => game.catalog(),

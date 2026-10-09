@@ -327,3 +327,8 @@ kbd { display: inline-block; background: var(--panel2); border: 1px solid var(--
   #raffle-widget { top: auto; bottom: 136px; left: 16px; min-width: 0; padding: 4px 8px; }
   #raffle-widget .rw-time { font-size: 16px; }
 }
+/* ---- v7: real Solana wallets ---- */
+.wallet-icon { width: 20px; height: 20px; vertical-align: middle; margin-right: 6px; image-rendering: auto; }
+.wallet-choice { display: flex; align-items: center; gap: 6px; }
+#wallet-hint { display: block; margin-top: 4px; font-size: 11px; }
+#wallet-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

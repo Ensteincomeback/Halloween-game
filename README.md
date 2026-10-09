@@ -74,6 +74,27 @@ lamps, windows, porch lights and the candle in your bucket.
   (`server/layout.js`, shared with the client) and rejects actions that would need
   faster-than-running travel since the last one.
 
+## Solana wallets (sign in with Solana)
+
+Players can connect a real Solana wallet (Phantom, Solflare, Backpack, or anything that
+supports the Wallet Standard) on the start menu or in Settings. The wallet signs one free,
+plain-text "Sign in with Solana" message (not a transaction). The server checks the ed25519
+signature, and the wallet is linked to the character. That wallet can sign back into the same
+character on any device, and it's how the game will know who pays when purchases move on-chain.
+
+- The message names the site, the address, the cluster, a one-time nonce and a 5-minute expiry.
+  The server only accepts a signature over the exact message it issued, and each nonce works once.
+- A wallet belongs to one character. Unlink it in Settings.
+- The start menu shows the wallet's real SOL balance, read from the cluster's public RPC.
+- `SOLANA_CLUSTER` (default `devnet`) and `SOLANA_RPC` (default `https://api.<cluster>.solana.com`)
+  pick the network. Get free devnet SOL at https://faucet.solana.com.
+- No npm packages: wallet discovery is in `public/js/wallet.js`, verification in `server/solana.js`.
+
+In-game $BOO, SOL, deeds and cards still live on the simulated chain. The roadmap is: (1) wallet
+sign-in ✅, (2) $BOO as an SPL token and deeds/cards as Metaplex NFTs on devnet, paid for by the
+linked wallet, (3) custom Anchor programs for the house market, raffles, fee split and monster
+bond, (4) replace `server/chain.js` with a real Solana client.
+
 ## Dev build
 
 ```bash
@@ -276,6 +297,7 @@ server/houses.js   Neighborhoods, reputation, deeds, dial, owner revenue, daily 
 server/monsters.js License, Fright, lairs, monster results, bounties
 server/economy.js  Shop, training, cards, prizes, claims, faucets, missions
 server/raffle.js   Transaction fee router, Town Raffle, prize pool, player raffles
+server/solana.js   Sign in with Solana: challenges, ed25519 verification, wallet links
 server/chain.js    Simulated chain: $BOO, SOL, NFTs, stake, escrow, signed claims, anchors
 server/config.js   Season Pack loader (extends + merge)
 server/layout.js   World layout (houses, doors, bank, gates, gatekeepers), shared with the client

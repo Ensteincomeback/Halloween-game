@@ -9,6 +9,7 @@ import { installMonsters } from './monsters.js';
 import { installEconomy } from './economy.js';
 import { createChain, toSol } from './chain.js';
 import { installRaffle } from './raffle.js';
+import { installSolana } from './solana.js';
 import { seasonHash } from './config.js';
 import { buildLayout } from './layout.js';
 import { installDev } from './dev.js';
@@ -17,7 +18,7 @@ export { GameError, buildOdds, rollOutcome, OUTCOMES };
 
 const DIVISIONS = { all: [1, Infinity], novice: [1, 4], regular: [5, 9], veteran: [10, Infinity] };
 
-export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {}, dev: devMode = false }) {
+export function createGame({ season, state, now = () => Date.now(), rng = Math.random, onChange = () => {}, dev: devMode = false, solana = {} }) {
   state.serverSecret ??= crypto.randomBytes(32).toString('hex');
   const chain = createChain({ state, token: season.token, now, secret: state.serverSecret });
   const layout = buildLayout(season);
@@ -29,6 +30,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
   installMonsters(ctx);
   installEconomy(ctx);
   installRaffle(ctx);
+  installSolana(ctx, solana);
 
   // Season registry: the active Season Pack's hash is anchored on-chain.
   const hash = seasonHash(season);
@@ -83,6 +85,8 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
         faucetUsedToday: p.faucetDay === ctx.today(), solFaucetUsedToday: p.solFaucetDay === ctx.today(),
       } : null,
       monster: deep ? ctx.monsterView(p) : null,
+      // The player's real Solana wallet, linked by a signed message (not the in-game wallet).
+      solana: p.solana || null,
       prizes: ctx.prizeStatus(p),
       rafflePrizes: Object.entries(p.redemptions).filter(([k]) => k.startsWith('raffle:'))
         .map(([, r]) => ({ id: r.id, prize: r.prize, kind: r.kind, usd: r.usd, round: r.round, status: r.status, at: r.at }))
@@ -125,7 +129,7 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       raffle: season.raffle, trophies: season.trophies, fees: { rate: season.fees.rate, split: season.fees.split },
       legendaryRules: { minGapMinutes: season.legendaryEvent.minGapMinutes, maxGapMinutes: season.legendaryEvent.maxGapMinutes, openMinutes: season.legendaryEvent.openMinutes, entryFee: season.legendaryEvent.entryFee },
       houseRules: { visitCandy: season.houses.visitCandy, ownerFeeShare: season.fees.split.houseOwners, marketFee: season.houses.marketFee },
-      layout, travel: season.travel, dev: devMode,
+      layout, travel: season.travel, dev: devMode, solana: ctx.solanaInfo,
       npcs: Object.fromEntries(Object.entries(season.npcs).filter(([k]) => !k.startsWith('_'))), statInfo: season.statInfo,
       stats: { windowPerCourageMs: season.scare.windowPerCourageMs, perSneak: season.ambush.perSneak, trapAvoidPerSneak: season.monster.trapAvoidPerSneak },
       outcomes: OUTCOMES, neighborhoods: season.neighborhoods.map(({ id, name, minLevel, unlockCost }) => ({ id, name, minLevel, unlockCost })),
@@ -190,6 +194,15 @@ export function createGame({ season, state, now = () => Date.now(), rng = Math.r
       return { token, player: playerView(player) };
     },
     me: withPlayer((p) => ({ lastEvent: p.lastEvent })),
+    walletChallenge: (address, host) => ctx.walletChallenge(address, host),
+    // With a token: link to that character. Without: sign in (or sign up) with the wallet.
+    walletVerify(token, body, ip) {
+      const current = token && state.tokens[token] ? ctx.playerByToken(token) : null;
+      const r = ctx.walletVerify({ ...body, player: current, ip });
+      onChange();
+      return { token: r.token, signedIn: !!r.signedIn, created: !!r.created, linked: !!r.linked, player: playerView(r.player) };
+    },
+    walletUnlink: withPlayer((p) => ctx.walletUnlink(p)),
     knock: withPlayer((p, houseId, gesture) => ({ result: ctx.knock(p, Number(houseId), gesture) })),
     resolveScare: withPlayer((p, id) => ({ result: ctx.resolveScare(p, id) })),
     resolveAmbush: withPlayer((p, id, counter, bribe) => ({ result: ctx.resolveAmbush(p, id, counter, !!bribe) })),

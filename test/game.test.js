@@ -853,3 +853,80 @@ test('layout: stores and mission givers sit on walkable ground', () => {
   for (const n of L.npcs) assert.ok(inZone(n.spot.x, n.spot.z), n.id);
   for (const n of Object.keys(season.npcs).filter((k) => !k.startsWith('_'))) assert.ok(L.npcs.some((x) => x.id === n), n);
 });
+
+// ---------------- real Solana wallets ----------------
+
+import crypto from 'node:crypto';
+import { base58Encode, base58Decode, verifySignature } from '../server/solana.js';
+
+function solanaKeypair() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const address = base58Encode(Buffer.from(publicKey.export({ format: 'jwk' }).x, 'base64url'));
+  const sign = (message) => base58Encode(crypto.sign(null, Buffer.from(message, 'utf8'), privateKey));
+  return { address, sign };
+}
+
+test('base58 round-trips, including leading zero bytes', () => {
+  for (const bytes of [[0, 0, 1, 2, 255], [255, 254], [0], crypto.randomBytes(32), crypto.randomBytes(64)]) {
+    const enc = base58Encode(Uint8Array.from(bytes));
+    assert.deepEqual([...base58Decode(enc)], [...bytes]);
+  }
+  assert.equal(base58Encode(new Uint8Array(32)), '1'.repeat(32), 'the system program address');
+  assert.throws(() => base58Decode('0OIl'), /bad base58/);
+});
+
+test('Sign in with Solana: signed challenge links a wallet, signs back in, and rejects forgeries and replays', () => {
+  const env = setup();
+  const kp = solanaKeypair();
+  assert.throws(() => env.game.walletChallenge('not-an-address', 'knock.test'), /not a Solana address/);
+
+  // New wallet, not logged in: needs a name, then creates a character linked to the wallet.
+  let ch = env.game.walletChallenge(kp.address, 'knock.test');
+  assert.match(ch.message, /^knock\.test wants you to sign in with your Solana account:\n/);
+  assert.ok(ch.message.includes(kp.address) && ch.message.includes('Chain ID: devnet') && ch.message.includes(`Nonce: ${ch.nonce}`));
+  assert.throws(() => env.game.walletVerify(null, { nonce: ch.nonce, signature: kp.sign(ch.message), walletName: 'Phantom' }, '10.9.0.1'), /character name/);
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  const sig = kp.sign(ch.message);
+  const r = env.game.walletVerify(null, { nonce: ch.nonce, signature: sig, walletName: 'Phantom', name: 'Wally' }, '10.9.0.1');
+  assert.ok(r.created && r.token);
+  assert.equal(r.player.name, 'Wally');
+  assert.deepEqual([r.player.solana.address, r.player.solana.wallet], [kp.address, 'Phantom']);
+  // The same signed challenge can't be replayed.
+  assert.throws(() => env.game.walletVerify(null, { nonce: ch.nonce, signature: sig }, '10.9.0.1'), /expired/);
+
+  // Signing in again from a "new device" returns the same character.
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  const again = env.game.walletVerify(null, { nonce: ch.nonce, signature: kp.sign(ch.message), walletName: 'Solflare' }, '10.9.0.2');
+  assert.ok(again.signedIn);
+  assert.equal(again.player.id, r.player.id);
+  assert.notEqual(again.token, r.token);
+  assert.equal(env.game.me(again.token).player.solana.wallet, 'Solflare');
+
+  // A signature from a different key, or for a different message, is rejected.
+  const evil = solanaKeypair();
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  assert.throws(() => env.game.walletVerify(null, { nonce: ch.nonce, signature: evil.sign(ch.message) }, '10.9.0.3'), /does not match/);
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  assert.throws(() => env.game.walletVerify(null, { nonce: ch.nonce, signature: kp.sign(ch.message + ' ') }, '10.9.0.3'), /does not match/);
+  assert.equal(verifySignature(kp.address, 'hello', base58Decode(kp.sign('hello'))), true);
+
+  // Challenges expire after 5 minutes.
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  env.clock.advance(5 * 60_000 + 1);
+  assert.throws(() => env.game.walletVerify(null, { nonce: ch.nonce, signature: kp.sign(ch.message) }, '10.9.0.3'), /expired/);
+
+  // A logged-in guest links a new wallet; a wallet can't belong to two characters.
+  const guest = env.login('Guest');
+  const kp2 = solanaKeypair();
+  ch = env.game.walletChallenge(kp2.address, 'knock.test');
+  const linked = env.game.walletVerify(guest.token, { nonce: ch.nonce, signature: kp2.sign(ch.message), walletName: 'Backpack' }, '10.9.0.4');
+  assert.ok(linked.linked && !linked.token);
+  assert.equal(guest.p.solana.address, kp2.address);
+  ch = env.game.walletChallenge(kp.address, 'knock.test');
+  assert.throws(() => env.game.walletVerify(guest.token, { nonce: ch.nonce, signature: kp.sign(ch.message) }, '10.9.0.4'), /already belongs to Wally/);
+
+  // Unlinking frees the wallet.
+  env.game.walletUnlink(guest.token);
+  assert.equal(guest.p.solana, null);
+  assert.equal(env.ctx.state.solanaLinks[kp2.address], undefined);
+});

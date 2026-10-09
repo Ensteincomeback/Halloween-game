@@ -8,6 +8,7 @@ import { kidFrame, npcSprite } from './pixel/sprites.js';
 import { createInput } from './input.js';
 import { helpHtml } from './ui/help.js';
 import { createDevPanel } from './ui/dev.js';
+import { listWallets, connectWallet, onWalletsChanged, getSolBalance, explorerUrl, base58Encode, INSTALL_LINKS } from './wallet.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -63,8 +64,6 @@ function toast(msg, ms = 2800) {
 
 // ---------- start menu ----------
 
-const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-const fakeSolanaAddress = () => Array.from({ length: 44 }, () => B58[Math.floor(Math.random() * B58.length)]).join('');
 const shortAddr = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 async function boot() {
@@ -110,30 +109,112 @@ function animatePreview() {
   }, 260);
 }
 
-function renderWallet() {
-  const addr = localStorage.getItem('knock.solana');
-  $('#wallet-connected').hidden = !addr;
-  $('#btn-wallet').hidden = !!addr;
-  if (addr) $('#wallet-addr').textContent = shortAddr(addr);
+// ---------- real Solana wallet (Sign in with Solana) ----------
+// The linked wallet is the player's identity: it signs one free message to
+// prove ownership, and can sign back into the same character on any device.
+const cluster = () => S.catalog?.solana?.cluster || 'devnet';
+
+async function refreshSolBalance() {
+  const sol = S.player?.solana;
+  if (!sol) return;
+  try {
+    S.solBalance = { address: sol.address, sol: await getSolBalance(S.catalog.solana.rpcUrl, sol.address) };
+  } catch {
+    S.solBalance = { address: sol.address, sol: null };
+  }
+  renderWallet();
 }
 
-$('#btn-wallet').addEventListener('click', () => {
-  showModal(`<h2>Connect a Solana wallet</h2>
-    <p class="muted small">Preview only: nothing is signed or sent yet. Play never needs a wallet.</p>
-    <div class="list">${['Phantom', 'Solflare', 'Backpack'].map((w) => `<button class="btn wallet-choice" data-wallet="${w}">◎ ${w}</button>`).join('')}</div>
-    <div class="actions"><button class="btn" data-close>Cancel</button></div>`);
-  document.querySelectorAll('[data-wallet]').forEach((b) => b.addEventListener('click', () => {
-    localStorage.setItem('knock.solana', fakeSolanaAddress());
-    localStorage.setItem('knock.solanaWallet', b.dataset.wallet);
+function walletLineHtml() {
+  const sol = S.player.solana;
+  const bal = S.solBalance?.address === sol.address ? S.solBalance.sol : undefined;
+  return `<span>◎ <b>${shortAddr(sol.address)}</b> <span class="muted small">${esc(sol.wallet)}</span></span>
+    <span class="badge">${esc(cluster())}${bal === undefined ? '' : bal === null ? ' · balance unavailable' : ` · ${bal.toFixed(3)} SOL`}</span>`;
+}
+
+function renderWallet() {
+  const linked = S.player?.solana;
+  $('#wallet-connected').hidden = !linked;
+  $('#btn-wallet').hidden = !!linked;
+  $('#btn-wallet').textContent = S.token ? '◎ Connect wallet' : '◎ Sign in with a Solana wallet';
+  $('#wallet-hint').textContent = linked ? 'Linked: sign in with this wallet on any device.'
+    : S.token ? 'Link a wallet to keep this character and play it anywhere.' : 'Already linked a wallet? Connect it to load your character.';
+  if (linked) {
+    $('#wallet-line').innerHTML = walletLineHtml();
+    if (S.solBalance?.address !== linked.address) refreshSolBalance();
+  }
+}
+
+function showWalletPicker() {
+  const draw = () => {
+    if (!S.pickingWallet) return;
+    const wallets = listWallets();
+    showModal(`<h2>Connect a Solana wallet</h2>
+      <p class="muted small">Your wallet signs one free message to prove it's yours. It's <b>not a transaction</b>: no fees, nothing leaves your wallet. Use <b>${esc(cluster())}</b>.</p>
+      ${wallets.length ? `<div class="list">${wallets.map((w, i) => `<button class="btn wallet-choice" data-wallet-i="${i}">${w.icon ? `<img src="${esc(w.icon)}" alt="" class="wallet-icon">` : '◎'} ${esc(w.name)}</button>`).join('')}</div>`
+        : `<p>No Solana wallet found in this browser. Install one, then reload:</p>
+           <div class="row-actions">${INSTALL_LINKS.map(([n, url]) => `<a class="btn small" href="${url}" target="_blank" rel="noopener">${n}</a>`).join('')}</div>
+           <p class="muted small">On a phone, open this page inside your wallet app's browser.</p>`}
+      <div class="actions"><button class="btn" data-close>Cancel</button></div>`);
+    document.querySelectorAll('[data-wallet-i]').forEach((b) => (b.onclick = () => signInWithWallet(wallets[Number(b.dataset.walletI)])));
+  };
+  S.pickingWallet = true;
+  draw();
+  // Wallets can register a moment after the page loads.
+  const off = onWalletsChanged(draw);
+  const stop = new MutationObserver(() => {
+    if ($('#modal').hidden) {
+      S.pickingWallet = false;
+      off();
+      stop.disconnect();
+    }
+  });
+  stop.observe($('#modal'), { attributes: true, attributeFilter: ['hidden'] });
+}
+
+async function signInWithWallet(entry) {
+  S.pickingWallet = false;
+  showModal(`<h2>${esc(entry.name)}</h2><p>Approve the connection, then sign the message in your wallet.</p><p class="muted small">It's free and isn't a transaction.</p>`, { locked: true });
+  try {
+    const w = await connectWallet(entry);
+    const ch = await api('wallet/challenge', { address: w.address });
+    const sig = await w.signMessage(ch.message);
+    const name = S.token ? undefined : $('#start-name').value.trim();
+    const r = await api('wallet/verify', { nonce: ch.nonce, signature: base58Encode(sig), walletName: w.name, name });
+    if (r.token) {
+      S.token = r.token;
+      localStorage.setItem('knock.token', r.token);
+    }
+    S.walletConn?.off?.();
+    S.walletConn = { ...w, off: w.onChange(() => toast('Your wallet switched accounts. Reconnect to link the new one.', 5000)) };
     closeModal();
-    renderWallet();
-    toast(`${b.dataset.wallet} connected (preview)`);
-  }));
-});
-$('#btn-wallet-disconnect').addEventListener('click', () => {
-  localStorage.removeItem('knock.solana');
-  renderWallet();
-});
+    toast(r.signedIn ? `◎ Welcome back, ${r.player.name}!` : r.created ? `◎ ${r.player.name} is linked to your wallet` : '◎ Wallet linked to this character');
+    if ($('#game').hidden) showStart();
+    else renderAll();
+    refreshSolBalance();
+  } catch (err) {
+    closeModal();
+    const msg = /reject|denied|cancel/i.test(err.message) ? 'Cancelled in the wallet.' : err.message;
+    toast(msg, 5000);
+  }
+}
+
+async function unlinkWallet() {
+  if (!confirm('Unlink this wallet? You will need this browser login (or to link it again) to get back to this character.')) return;
+  try {
+    await api('wallet/unlink', {});
+    await S.walletConn?.disconnect?.();
+    S.walletConn = null;
+    toast('Wallet unlinked');
+    if ($('#game').hidden) showStart();
+    else showSettings();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$('#btn-wallet').addEventListener('click', () => showWalletPicker());
+$('#btn-wallet-disconnect').addEventListener('click', () => unlinkWallet());
 $('#btn-new-character').addEventListener('click', (e) => {
   e.preventDefault();
   if (!confirm('Start a new character? Your current one stays tied to its own login.')) return;
@@ -162,6 +243,10 @@ $('#start-form').addEventListener('submit', async (e) => {
 });
 
 function logout(show = true) {
+  S.walletConn?.off?.();
+  S.walletConn?.disconnect?.();
+  S.walletConn = null;
+  S.solBalance = null;
   localStorage.removeItem('knock.token');
   localStorage.removeItem('knock.pos');
   S.token = null;
@@ -1191,7 +1276,8 @@ async function renderStreets() {
   $('#tab-streets').innerHTML = `
     <h3>Wallet</h3>
     <div class="statcard">
-      <div class="row"><span>Address</span><span class="mono">${esc(w.address.slice(0, 14))}…</span></div>
+      <div class="row"><span>Game wallet</span><span class="mono">${esc(w.address.slice(0, 14))}…</span></div>
+      <div class="row"><span>Your Solana wallet</span>${p.solana ? `<a class="mono" href="${explorerUrl(p.solana.address, cluster())}" target="_blank" rel="noopener">◎ ${shortAddr(p.solana.address)}</a>` : '<span class="muted">not linked (Settings)</span>'}</div>
       <div class="row"><span>$${sym()}</span><b>${w.boo}</b></div>
       <div class="row"><span>SOL</span><b>${w.sol}</b></div>
       <div class="row"><span>Claimable</span><b>${w.claimable}</b></div>
@@ -1202,7 +1288,7 @@ async function renderStreets() {
       <button class="btn small" data-act="faucet" ${w.faucetUsedToday ? 'disabled' : ''}>Get devnet $${sym()}</button>
       <button class="btn small" data-act="solfaucet" ${w.solFaucetUsedToday ? 'disabled' : ''}>Get devnet SOL</button>
     </div>
-    <p class="muted small">Devnet: $${sym()} and SOL here are test currency on a simulated chain. Houses are bought and sold in SOL.</p>
+    <p class="muted small">$${sym()} and SOL in the game wallet are still test currency on a simulated chain. Houses are bought and sold in SOL. Next update: these move onto Solana ${esc(cluster())} and your linked wallet pays for them.</p>
 
     <h3 class="section">Become a monster</h3>
     ${m.type ? `
@@ -1641,6 +1727,9 @@ function showSettings() {
       <label class="setting-row"><span>Show controls hint</span><input type="checkbox" id="set-hint" ${hint ? 'checked' : ''}></label>
       <div class="setting-row"><span>Tutorial</span><button class="btn small" id="set-tutorial">🎓 Replay</button></div>
       <div class="setting-row"><span>How to play</span><button class="btn small" id="set-help">❔ Open</button></div>
+      <div class="setting-row"><span>Solana wallet</span>${S.player.solana
+        ? `<span class="row-actions" style="margin:0"><a class="btn small" href="${explorerUrl(S.player.solana.address, cluster())}" target="_blank" rel="noopener" title="View on Solana Explorer">◎ ${shortAddr(S.player.solana.address)}</a><button class="btn small" id="set-unlink">Unlink</button></span>`
+        : '<button class="btn small wallet-btn" id="set-wallet">◎ Connect</button>'}</div>
       ${S.catalog.dev ? '<div class="setting-row"><span>Dev panel</span><button class="btn small dev-btn" id="set-dev">DEV</button></div>' : ''}
     </div>
     <div class="actions">
@@ -1671,8 +1760,10 @@ function showSettings() {
     S.dev?.toggle(true);
   };
   $('#set-main-menu').onclick = () => backToMainMenu();
+  if ($('#set-wallet')) $('#set-wallet').onclick = () => showWalletPicker();
+  if ($('#set-unlink')) $('#set-unlink').onclick = () => unlinkWallet();
   $('#set-logout').onclick = () => {
-    if (!confirm('Log out? Your progress is tied to this login.')) return;
+    if (!confirm(S.player.solana ? 'Log out? Connect your wallet again to come back to this character.' : 'Log out? Without a linked wallet, your progress is tied to this browser login.')) return;
     backToMainMenu();
     logout();
   };

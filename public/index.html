@@ -24,12 +24,13 @@
         </label>
         <p id="start-returning" class="muted small" hidden>Welcome back! <span id="start-returning-name"></span> · <a href="#" id="btn-new-character">New character</a></p>
         <div class="field">
-          <span>Solana wallet <em class="muted">(optional · preview)</em></span>
+          <span>Solana wallet <em class="muted">(optional)</em></span>
           <button type="button" id="btn-wallet" class="btn wallet-btn">◎ Connect wallet</button>
           <div id="wallet-connected" class="wallet-connected" hidden>
-            <span>◎ <b id="wallet-addr"></b></span><span class="badge">Devnet preview</span>
-            <button type="button" id="btn-wallet-disconnect" class="btn small">Disconnect</button>
+            <span id="wallet-line"></span>
+            <button type="button" id="btn-wallet-disconnect" class="btn small">Unlink</button>
           </div>
+          <small id="wallet-hint" class="muted"></small>
         </div>
         <button class="btn primary big" id="btn-play" type="submit">▶ Play</button>
         <button type="button" class="btn" id="btn-start-help">❔ How to play</button>
