@@ -1,0 +1,22 @@
+# For `anchor build` / `anchor deploy` on a machine with the Solana + Anchor
+# toolchain (e.g. WSL2 on Windows). Run `anchor keys sync` once to replace the
+# placeholder program ID with your own deploy key's ID.
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+knock = "5pScjwBKXZ1DNCEMWHFB5Hk7yNcXTMw5CAwZCtNwxmYB"
+
+[programs.devnet]
+knock = "5pScjwBKXZ1DNCEMWHFB5Hk7yNcXTMw5CAwZCtNwxmYB"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test -p knock"
